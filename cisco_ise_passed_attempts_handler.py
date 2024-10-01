@@ -2,13 +2,10 @@ import os
 import re
 import logging
 from datetime import datetime
-import psycopg2
-import psycopg2.extras
-from psycopg2 import sql
+from database_utils import pwa_inserter, pla_inserter
 
 def handle_cisco_ise_passed_attempts(ip, message):
     output_dir = 'c:/syslog'
-    DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/ciscoise"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
    
@@ -52,10 +49,8 @@ def handle_cisco_ise_passed_attempts(ip, message):
         'RadiusFlowType': r'RadiusFlowType=(.*?),[\s<]'
     }
 
-    switch_field_patterns = {
-        # 'Switch-Additional-Field1': r'Switch-Field1=(.*?),[\s<]',
-        # 'Switch-Additional-Field2': r'Switch-Field2=(.*?),[\s<]'
-    }
+    switch_field_patterns = {}
+
     #first things first
     extracted_fields = {}
     extracted_fields['source_ip'] = ip #add source ip
@@ -66,13 +61,11 @@ def handle_cisco_ise_passed_attempts(ip, message):
         extracted_fields['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # Extract the fields using regex
-
     for key, pattern in common_field_patterns.items():
         matches = re.findall(pattern, message)
         if matches:
             # Handle the case where there might be multiple values
             if len(matches) > 1:
-
                 try:
                     if key=='UserName': #username field
                         matches= list(map(lambda x: x.replace("-","").lower(),matches)) #replace - and set to lower case
@@ -94,52 +87,40 @@ def handle_cisco_ise_passed_attempts(ip, message):
             if matches:
                 extracted_fields[key] = matches[0]
 
-        table_name = 'pwa' #passedLANAuthentications
-
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        insert_stmt = sql.SQL('INSERT INTO {} (timestamp, sourceip, nasipaddress, networkdevicename, requestlatency, ciscoavpairmethod, username, authenticationmethod, authenticationidentitystore, selectedaccessservice, selectedauthorizationprofiles, identitygroup, selectedauthenticationidentitystores, authenticationstatus, ndlocation, nddevice, ndrollout, ndreauth, ndclosed, identitypolicymatchedrule, authorizationpolicymatchedrule, subjectcommonname, endpointmacaddress, isepolicysetname, adhostresolveddns, daystoexpiry, sessiontimeout, ciscoavpairacs, deviceip, calledstationid, radiusflowtype) VALUES %s').format(sql.Identifier(table_name))
-        row_data = [extracted_fields.get('timestamp'),
-                    extracted_fields.get('source_ip'),
-                    extracted_fields.get('NAS-IP-Address'),
-                    extracted_fields.get('NetworkDeviceName'),
-                    extracted_fields.get('RequestLatency'),
-                    extracted_fields.get('cisco-av-pair=method'),
-                    extracted_fields.get('UserName'),
-                    extracted_fields.get('AuthenticationMethod'),
-                    extracted_fields.get('AuthenticationIdentityStore'),
-                    extracted_fields.get('SelectedAccessService'),
-                    extracted_fields.get('SelectedAuthorizationProfiles'),
-                    extracted_fields.get('IdentityGroup'),
-                    extracted_fields.get('SelectedAuthenticationIdentityStores'),
-                    extracted_fields.get('AuthenticationStatus'),
-                    extracted_fields.get('NetworkDeviceGroups=Location#'),
-                    extracted_fields.get('NetworkDeviceGroups=Device='),
-                    extracted_fields.get('NetworkDeviceGroups=Rollout='),
-                    extracted_fields.get('NetworkDeviceGroups=Reauth='),
-                    extracted_fields.get('NetworkDeviceGroups=Closed='),
-                    extracted_fields.get('IdentityPolicyMatchedRule'),
-                    extracted_fields.get('AuthorizationPolicyMatchedRule'),
-                    extracted_fields.get('Subject - Common Name'),
-                    extracted_fields.get('EndPointMACAddress'),
-                    extracted_fields.get('ISEPolicySetName'),
-                    extracted_fields.get('AD-Host-Resolved-DNs'),
-                    extracted_fields.get('Days to Expiry'),
-                    extracted_fields.get('Session-Timeout'),
-                    extracted_fields.get('cisco-av-pair=ACS'),
-                    extracted_fields.get('DeviceIP'),
-                    extracted_fields.get('Called-Station-ID'),
-                    extracted_fields.get('RadiusFlowType')                    ]
-
-        try:
-            psycopg2.extras.execute_values(cursor, insert_stmt, [tuple(row_data)])
-            conn.commit()
-        except Exception as error:
-            logging.error(f"Error inserting data into PostgreSQL: {error}")
-        finally:
-            cursor.close()
-            conn.close()
+        row_data = [
+            extracted_fields.get('timestamp'),
+            extracted_fields.get('source_ip'),
+            extracted_fields.get('NAS-IP-Address'),
+            extracted_fields.get('NetworkDeviceName'),
+            extracted_fields.get('RequestLatency'),
+            extracted_fields.get('cisco-av-pair=method'),
+            extracted_fields.get('UserName'),
+            extracted_fields.get('AuthenticationMethod'),
+            extracted_fields.get('AuthenticationIdentityStore'),
+            extracted_fields.get('SelectedAccessService'),
+            extracted_fields.get('SelectedAuthorizationProfiles'),
+            extracted_fields.get('IdentityGroup'),
+            extracted_fields.get('SelectedAuthenticationIdentityStores'),
+            extracted_fields.get('AuthenticationStatus'),
+            extracted_fields.get('NetworkDeviceGroups=Location#'),
+            extracted_fields.get('NetworkDeviceGroups=Device='),
+            extracted_fields.get('NetworkDeviceGroups=Rollout='),
+            extracted_fields.get('NetworkDeviceGroups=Reauth='),
+            extracted_fields.get('NetworkDeviceGroups=Closed='),
+            extracted_fields.get('IdentityPolicyMatchedRule'),
+            extracted_fields.get('AuthorizationPolicyMatchedRule'),
+            extracted_fields.get('Subject - Common Name'),
+            extracted_fields.get('EndPointMACAddress'),
+            extracted_fields.get('ISEPolicySetName'),
+            extracted_fields.get('AD-Host-Resolved-DNs'),
+            extracted_fields.get('Days to Expiry'),
+            extracted_fields.get('Session-Timeout'),
+            extracted_fields.get('cisco-av-pair=ACS'),
+            extracted_fields.get('DeviceIP'),
+            extracted_fields.get('Called-Station-ID'),
+            extracted_fields.get('RadiusFlowType')
+        ]
+        pwa_inserter.add_to_batch(tuple(row_data))
 
     # Check for switch specific fields
     elif 'NetworkDeviceGroups=Device=' in extracted_fields and 'switch' in extracted_fields['NetworkDeviceGroups=Device=']:
@@ -148,58 +129,44 @@ def handle_cisco_ise_passed_attempts(ip, message):
             if matches:
                 extracted_fields[key] = matches[0]
 
-        table_name = 'pla' #passedLANAuthentications
-
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        insert_stmt = sql.SQL('INSERT INTO {} (timestamp, sourceip, nasipaddress, nasportid, networkdevicename, requestlatency, ciscoavpairmethod, username, authenticationmethod, authenticationidentitystore, selectedaccessservice, selectedauthorizationprofiles, identitygroup, selectedauthenticationidentitystores, authenticationstatus, ndlocation, nddevice, ndrollout, ndreauth, ndclosed, identitypolicymatchedrule, authorizationpolicymatchedrule, subjectcommonname, endpointmacaddress, isepolicysetname, adhostresolveddns, daystoexpiry, sessiontimeout, ciscoavpairacs, deviceip) VALUES %s').format(sql.Identifier(table_name))
-        row_data = [extracted_fields.get('timestamp'),
-                    extracted_fields.get('source_ip'),
-                    extracted_fields.get('NAS-IP-Address'),
-                    extracted_fields.get('NAS-Port-Id'),
-                    extracted_fields.get('NetworkDeviceName'),
-                    extracted_fields.get('RequestLatency'),
-                    extracted_fields.get('cisco-av-pair=method'),
-                    extracted_fields.get('UserName'),
-                    extracted_fields.get('AuthenticationMethod'),
-                    extracted_fields.get('AuthenticationIdentityStore'),
-                    extracted_fields.get('SelectedAccessService'),
-                    extracted_fields.get('SelectedAuthorizationProfiles'),
-                    extracted_fields.get('IdentityGroup'),
-                    extracted_fields.get('SelectedAuthenticationIdentityStores'),
-                    extracted_fields.get('AuthenticationStatus'),
-                    extracted_fields.get('NetworkDeviceGroups=Location#'),
-                    extracted_fields.get('NetworkDeviceGroups=Device='),
-                    extracted_fields.get('NetworkDeviceGroups=Rollout='),
-                    extracted_fields.get('NetworkDeviceGroups=Reauth='),
-                    extracted_fields.get('NetworkDeviceGroups=Closed='),
-                    extracted_fields.get('IdentityPolicyMatchedRule'),
-                    extracted_fields.get('AuthorizationPolicyMatchedRule'),
-                    extracted_fields.get('Subject - Common Name'),
-                    extracted_fields.get('EndPointMACAddress'),
-                    extracted_fields.get('ISEPolicySetName'),
-                    extracted_fields.get('AD-Host-Resolved-DNs'),
-                    extracted_fields.get('Days to Expiry'),
-                    extracted_fields.get('Session-Timeout'),
-                    extracted_fields.get('cisco-av-pair=ACS'),
-                    extracted_fields.get('DeviceIP')]
-
-        try:
-            psycopg2.extras.execute_values(cursor, insert_stmt, [tuple(row_data)])
-            conn.commit()
-        except Exception as error:
-            logging.error(f"Error inserting data into PostgreSQL: {error}")
-        finally:
-            cursor.close()
-            conn.close()
+        row_data = [
+            extracted_fields.get('timestamp'),
+            extracted_fields.get('source_ip'),
+            extracted_fields.get('NAS-IP-Address'),
+            extracted_fields.get('NAS-Port-Id'),
+            extracted_fields.get('NetworkDeviceName'),
+            extracted_fields.get('RequestLatency'),
+            extracted_fields.get('cisco-av-pair=method'),
+            extracted_fields.get('UserName'),
+            extracted_fields.get('AuthenticationMethod'),
+            extracted_fields.get('AuthenticationIdentityStore'),
+            extracted_fields.get('SelectedAccessService'),
+            extracted_fields.get('SelectedAuthorizationProfiles'),
+            extracted_fields.get('IdentityGroup'),
+            extracted_fields.get('SelectedAuthenticationIdentityStores'),
+            extracted_fields.get('AuthenticationStatus'),
+            extracted_fields.get('NetworkDeviceGroups=Location#'),
+            extracted_fields.get('NetworkDeviceGroups=Device='),
+            extracted_fields.get('NetworkDeviceGroups=Rollout='),
+            extracted_fields.get('NetworkDeviceGroups=Reauth='),
+            extracted_fields.get('NetworkDeviceGroups=Closed='),
+            extracted_fields.get('IdentityPolicyMatchedRule'),
+            extracted_fields.get('AuthorizationPolicyMatchedRule'),
+            extracted_fields.get('Subject - Common Name'),
+            extracted_fields.get('EndPointMACAddress'),
+            extracted_fields.get('ISEPolicySetName'),
+            extracted_fields.get('AD-Host-Resolved-DNs'),
+            extracted_fields.get('Days to Expiry'),
+            extracted_fields.get('Session-Timeout'),
+            extracted_fields.get('cisco-av-pair=ACS'),
+            extracted_fields.get('DeviceIP')
+        ]
+        pla_inserter.add_to_batch(tuple(row_data))
 
     else:
-    # Write the extracted fields to the file
+        # Write the extracted fields to the file
         try:
             with open(file_path, 'a') as file:
-                # for key, value in extracted_fields.items():
-                #     file.write(f"{key}={value}\n")
                 file.write(message)  # Separate entries by a new line
         except Exception as error:
             logging.error(f"Error writing syslog to file: {error}")
