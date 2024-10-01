@@ -9,6 +9,7 @@ import threading
 import queue
 import time
 import concurrent.futures
+from database_utils import flush_all_batches
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -20,12 +21,13 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.sock = None
         self.is_running = True
         self.setup_logging()
-        self.message_queue = queue.Queue()  # Queue to hold incoming messages
-        self.max_queue_size = 10000  # Set a max queue size to prevent excessive backlog
+        self.message_queue = queue.Queue()
+        self.max_queue_size = 10000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
         self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
-        self.min_thread_count = 152  # Minimum number of threads to maintain
+        self.min_thread_count = 152
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.min_thread_count)
+        self.flush_interval = 300  # 5 minutes
 
     def setup_logging(self):
         log_directory = r'C:\\Syslog'
@@ -47,7 +49,6 @@ class SyslogService(win32serviceutil.ServiceFramework):
         win32event.SetEvent(self.hWaitStop)
 
     def start_syslog_server(self, enable_file_logging=True):
-
         def write_syslog_to_file(directory, filename, message):
             if enable_file_logging:
                 os.makedirs(directory, exist_ok=True)
@@ -90,6 +91,15 @@ class SyslogService(win32serviceutil.ServiceFramework):
                     self.last_logged_size = queue_size
                 time.sleep(10)
 
+        def periodic_flush():
+            while self.is_running:
+                time.sleep(self.flush_interval)
+                try:
+                    flush_all_batches()
+                    logging.info(f"Periodic flush completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                except Exception as e:
+                    logging.error(f"Error during periodic flush: {e}")
+
         IP = "10.23.252.3"
         PORT = 514
 
@@ -100,7 +110,9 @@ class SyslogService(win32serviceutil.ServiceFramework):
 
         for _ in range(self.min_thread_count):
             self.executor.submit(process_syslog_queue)
+        
         threading.Thread(target=monitor_queue_size, daemon=True).start()
+        threading.Thread(target=periodic_flush, daemon=True).start()
 
         while self.is_running:
             try:
