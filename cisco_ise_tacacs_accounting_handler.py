@@ -1,12 +1,8 @@
-import psycopg2
-import psycopg2.extras
-from psycopg2 import sql
 import logging
 from datetime import datetime
 import re
 import os
-
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/ciscoise"
+from database_utils import tca_inserter
 
 def parse_syslog_message(message):
     data = {}
@@ -21,7 +17,6 @@ def parse_syslog_message(message):
     device_ip_search = re.search(r'Device IP Address=([^,]+)', message)
     if device_ip_search:
         data['NetworkDeviceIP'] = device_ip_search.group(1)
-
 
     RemoteAddr_search = re.search(r'Remote-Address=([^,]+)', message)
     if RemoteAddr_search:
@@ -48,23 +43,13 @@ def handle_cisco_ise_tacacs_accounting(ip, message):
     logging.info("Logged TACACS accounting message")
 
     if 'terminal pager 0' not in log_data.get('CmdSet', ''):
-        table_name = 'tca'
-
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        insert_stmt = sql.SQL('INSERT INTO {} (timestamp, username, networkdevicename, networkdeviceip, remotedevice, cmdset, ipaddress) VALUES %s').format(sql.Identifier(table_name)) #add ipaddress
-
-        # timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        row_data = [log_data.get('timestamp'), log_data.get('Username'), 
-                    log_data.get('NetworkDeviceName'), log_data.get('NetworkDeviceIP'), 
-                    log_data.get('RemoteDevice'), log_data.get('CmdSet'), ip]
-
-        try:
-            psycopg2.extras.execute_values(cursor, insert_stmt, [tuple(row_data)])
-            conn.commit()
-        except Exception as error:
-            logging.error(f"Error inserting data into PostgreSQL: {error}")
-        finally:
-            cursor.close()
-            conn.close()
+        row_data = [
+            log_data.get('timestamp'),
+            log_data.get('Username'),
+            log_data.get('NetworkDeviceName'),
+            log_data.get('NetworkDeviceIP'),
+            log_data.get('RemoteDevice'),
+            log_data.get('CmdSet'),
+            ip
+        ]
+        tca_inserter.add_to_batch(tuple(row_data))
