@@ -59,7 +59,15 @@ class BatchedDatabaseInserter:
 
     def flush(self):
         self._insert_batch()
-
+        
+def flush_all_batches():
+  fta_inserter.flush()
+  fwa_inserter.flush()
+  fla_inserter.flush()
+  pwa_inserter.flush()
+  pla_inserter.flush()
+  tca_inserter.flush()
+        
 # Create instances for each table
 fta_inserter = BatchedDatabaseInserter('fta', ('timestamp', 'ipaddress', 'username', 'nasipaddress', 'remoteaddress', 'failurereason', 'networkdevicename', 'requestlatency'))
 fwa_inserter = BatchedDatabaseInserter('fwa', ('timestamp', 'ipaddress', 'username', 'nasipaddress', 'calledstationid', 'failurereason', 'networkdevicename'))
