@@ -1,0 +1,42 @@
+2024-10-02 11:12:18,351 - INFO - Ignoring rejected message from 10.23.18.223
+2024-10-02 11:12:18,354 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,356 - INFO - Full message joined: 0001067905
+2024-10-02 11:12:18,367 - DEBUG - Processing message from 10.23.18.223
+2024-10-02 11:12:18,367 - INFO - Full message joined: 0004959532
+2024-10-02 11:12:18,367 - INFO - Ignoring rejected message from 10.23.18.223
+2024-10-02 11:12:18,386 - DEBUG - Processing message from 10.24.18.223
+2024-10-02 11:12:18,387 - INFO - Full message joined: 0001341487
+2024-10-02 11:12:18,387 - INFO - Ignoring rejected message from 10.24.18.223
+2024-10-02 11:12:18,398 - DEBUG - Processing message from 10.23.18.223
+2024-10-02 11:12:18,399 - INFO - Full message joined: 0004959533
+2024-10-02 11:12:18,399 - INFO - Ignoring rejected message from 10.23.18.223
+2024-10-02 11:12:18,407 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.220
+2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,410 - INFO - Full message joined: 0001327572
+2024-10-02 11:12:18,410 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,411 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,411 - DEBUG - Processing message from 10.23.18.221
+2024-10-02 11:12:18,411 - INFO - Full message joined: 0001067906
+2024-10-02 11:12:24,160 - INFO - Active threads: 205, Queue size: 1975
+2024-10-02 11:12:34,164 - INFO - Active threads: 205, Queue size: 5622
+2024-10-02 11:12:44,173 - INFO - Active threads: 205, Queue size: 9085
+2024-10-02 11:12:54,178 - INFO - Active threads: 205, Queue size: 12402
+2024-10-02 11:13:04,190 - INFO - Active threads: 205, Queue size: 15519
+2024-10-02 11:13:04,496 - INFO - Inserted 116 rows into pla
+2024-10-02 11:13:04,746 - INFO - Inserted 18 rows into pwa
+2024-10-02 11:13:05,287 - INFO - Inserted 4 rows into fwa
+2024-10-02 11:13:14,194 - INFO - Active threads: 202, Queue size: 18477
+2024-10-02 11:13:24,252 - INFO - Active threads: 202, Queue size: 22048
+2024-10-02 11:13:34,261 - INFO - Active threads: 202, Queue size: 25281
+2024-10-02 11:13:44,276 - INFO - Active threads: 202, Queue size: 28662
+2024-10-02 11:13:54,279 - INFO - Active threads: 202, Queue size: 32029
+2024-10-02 11:14:04,296 - INFO - Active threads: 202, Queue size: 35535
+2024-10-02 11:14:14,306 - INFO - Active threads: 202, Queue size: 37750
