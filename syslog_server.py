@@ -9,7 +9,7 @@ import threading
 import queue
 import time
 import concurrent.futures
-from database_utils import flush_all_batches
+from database_utils import flush_all_batches, log_batch_status
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -22,17 +22,19 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.is_running = True
         self.setup_logging()
         self.message_queue = queue.Queue()
-        self.max_queue_size = 10000
+        self.max_queue_size = 20000  # Increased from 10000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
         self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
         self.min_thread_count = 152
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.min_thread_count)
-        self.flush_interval = 30  # 5 minutes
+        self.flush_interval = 30  # 30 seconds
+        self.last_logged_size = 0
 
     def setup_logging(self):
         log_directory = r'C:\\Syslog'
         log_filename = 'syslogService.txt'
-        logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.WARN,
+        os.makedirs(log_directory, exist_ok=True)
+        logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s', filemode='a')
         logging.info(f"Logging started")
 
@@ -60,12 +62,12 @@ class SyslogService(win32serviceutil.ServiceFramework):
             while self.is_running:
                 try:
                     addr, message = self.message_queue.get(timeout=1)
-                    logging.info(f"processing message: {message}")
+                    logging.debug(f"Processing message: {message[:100]}...")  # Log first 100 chars
                     try:
                         handle_syslog(addr, message)
                     except Exception as e:
                         logging.error(f"Error processing syslog message: {e}")
-                        logging.error(f"Message: {message}")
+                        logging.error(f"Message: {message[:500]}...")  # Log first 500 chars of the message
                     finally:
                         self.message_queue.task_done()
                 except queue.Empty:
@@ -77,20 +79,29 @@ class SyslogService(win32serviceutil.ServiceFramework):
         def monitor_queue_size():
             while self.is_running:
                 tcnt = threading.active_count()
-                logging.info(tcnt)
+                logging.info(f"Active thread count: {tcnt}")
                 
                 threads_to_start = self.min_thread_count - tcnt
-                logging.warning(f"Thread count dropped to {tcnt}. Starting {threads_to_start} new threads.")
-                for _ in range(threads_to_start):
-                    self.executor.submit(process_syslog_queue)
-                with open(self.thread_monitoring_file, 'a') as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count Before Replenishment: {tcnt}\n")
+                if threads_to_start > 0:
+                    logging.warning(f"Thread count dropped to {tcnt}. Starting {threads_to_start} new threads.")
+                    for _ in range(threads_to_start):
+                        self.executor.submit(process_syslog_queue)
+                
+                try:
+                    with open(self.thread_monitoring_file, 'a') as f:
+                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count: {tcnt}\n")
+                except Exception as e:
+                    logging.error(f"Error writing to thread monitoring file: {e}")
                
                 queue_size = self.message_queue.qsize()
-                if queue_size > 0 and queue_size != self.last_logged_size:
-                    with open(self.queue_monitoring_file, 'a') as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
-                    self.last_logged_size = queue_size
+                if queue_size > 0 or queue_size != self.last_logged_size:
+                    try:
+                        with open(self.queue_monitoring_file, 'a') as f:
+                            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
+                        self.last_logged_size = queue_size
+                    except Exception as e:
+                        logging.error(f"Error writing to queue monitoring file: {e}")
+                
                 time.sleep(10)
 
         def periodic_flush():
@@ -98,6 +109,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
                 time.sleep(self.flush_interval)
                 try:
                     flush_all_batches()
+                    log_batch_status()  # New function to log batch status
                     logging.info(f"Periodic flush completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
                 except Exception as e:
                     logging.error(f"Error during periodic flush: {e}")
