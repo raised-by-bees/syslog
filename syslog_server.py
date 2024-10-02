@@ -5,11 +5,63 @@ import win32serviceutil
 import win32service
 import win32event
 from handler_dispatcher import handle_syslog
-import threading
+import multiprocessing
 import queue
 import time
-import concurrent.futures
 from database_utils import flush_all_batches, log_batch_status
+import signal
+
+def setup_logging(process_name):
+    log_directory = r'C:\Syslog'
+    log_filename = f'syslogService_{process_name}.txt'
+    os.makedirs(log_directory, exist_ok=True)
+    logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
+                        format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s', filemode='a')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    logging.info(f"Logging started for {process_name}")
+
+def process_syslog_queue(message_queue, is_running, flush_interval):
+    setup_logging("Worker")
+    last_flush_time = time.time()
+    
+    while is_running.value:
+        try:
+            addr, message = message_queue.get(timeout=1)
+            logging.debug(f"Processing message from {addr}")
+            try:
+                handle_syslog(addr, message)
+            except Exception as e:
+                logging.error(f"Error processing syslog message: {e}")
+            
+            # Check if it's time for a batch insert
+            current_time = time.time()
+            if current_time - last_flush_time >= flush_interval:
+                last_flush_time = current_time
+                try:
+                    flush_all_batches()
+                    log_batch_status()
+                    logging.info(f"Batch insert completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                except Exception as e:
+                    logging.error(f"Error during batch insert: {e}")
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logging.error(f"Unexpected error in process_syslog_queue: {e}")
+            time.sleep(1)
+
+def monitor_queue_size(message_queue, is_running, queue_monitoring_file):
+    setup_logging("Monitor")
+    while is_running.value:
+        queue_size = message_queue.qsize()
+        logging.info(f"Queue size: {queue_size}")
+        try:
+            with open(queue_monitoring_file, 'a') as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
+        except Exception as e:
+            logging.error(f"Error writing to queue monitoring file: {e}")
+        time.sleep(5)
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -18,30 +70,13 @@ class SyslogService(win32serviceutil.ServiceFramework):
     def __init__(self, args):
         win32serviceutil.ServiceFramework.__init__(self, args)
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
-        self.sock = None
-        self.is_running = True
-        self.setup_logging()
-        self.message_queue = queue.Queue()
-        self.max_queue_size = 50000  # Increased max queue size
+        self.is_running = multiprocessing.Value('b', True)
+        self.message_queue = multiprocessing.Queue()
+        self.max_queue_size = 100000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
-        self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
-        self.min_thread_count = 200  # Increased minimum thread count
-        self.max_thread_count = 500  # Increased maximum thread count
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_thread_count)
-        self.flush_interval = 15  # Reduced flush interval to 15 seconds
-        self.last_logged_size = 0
-        self.last_flush_time = time.time()
-
-    def setup_logging(self):
-        log_directory = r'C:\Syslog'
-        log_filename = 'syslogService.txt'
-        os.makedirs(log_directory, exist_ok=True)
-        logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
-                            format='%(asctime)s - %(levelname)s - %(message)s', filemode='a')
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        logging.getLogger('').addHandler(console)
-        logging.info("Logging started")
+        self.num_processes = multiprocessing.cpu_count()
+        self.flush_interval = 5
+        self.processes = []
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
@@ -49,78 +84,40 @@ class SyslogService(win32serviceutil.ServiceFramework):
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-        self.is_running = False
-        if self.sock:
-            self.sock.close()
-        self.executor.shutdown(wait=True)
+        self.is_running.value = False
+        for process in self.processes:
+            process.join(timeout=5)
+            if process.is_alive():
+                process.terminate()
         win32event.SetEvent(self.hWaitStop)
 
     def start_syslog_server(self):
-        def process_syslog_queue():
-            while self.is_running:
-                try:
-                    addr, message = self.message_queue.get(timeout=1)
-                    logging.debug(f"Processing message from {addr}")
-                    try:
-                        handle_syslog(addr, message)
-                    except Exception as e:
-                        logging.error(f"Error processing syslog message: {e}")
-                    finally:
-                        self.message_queue.task_done()
-                        
-                    # Check if it's time for a batch insert
-                    current_time = time.time()
-                    if current_time - self.last_flush_time >= self.flush_interval:
-                        self.last_flush_time = current_time
-                        self.executor.submit(self.perform_batch_insert)
-                except queue.Empty:
-                    continue
-                except Exception as e:
-                    logging.error(f"Unexpected error in process_syslog_queue: {e}")
-                    time.sleep(1)
+        setup_logging("Main")
 
-        def monitor_queue_size():
-            while self.is_running:
-                active_threads = len([t for t in threading.enumerate() if t.is_alive() and t != threading.current_thread()])
-                queue_size = self.message_queue.qsize()
-                
-                logging.info(f"Active threads: {active_threads}, Queue size: {queue_size}")
-                
-                self.write_to_file(self.thread_monitoring_file, f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count: {active_threads}")
-                self.write_to_file(self.queue_monitoring_file, f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}")
-                
-                if active_threads < self.min_thread_count:
-                    threads_to_start = min(self.min_thread_count - active_threads, self.max_thread_count - active_threads)
-                    logging.warning(f"Starting {threads_to_start} new threads")
-                    for _ in range(threads_to_start):
-                        self.executor.submit(process_syslog_queue)
-                
-                time.sleep(10)
+        # Start worker processes
+        for _ in range(self.num_processes):
+            p = multiprocessing.Process(target=process_syslog_queue, 
+                                        args=(self.message_queue, self.is_running, self.flush_interval))
+            p.start()
+            self.processes.append(p)
 
-        def perform_batch_insert():
-            try:
-                flush_all_batches()
-                log_batch_status()
-                logging.info(f"Batch insert completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-            except Exception as e:
-                logging.error(f"Error during batch insert: {e}")
+        # Start monitoring process
+        monitor_process = multiprocessing.Process(target=monitor_queue_size, 
+                                                  args=(self.message_queue, self.is_running, self.queue_monitoring_file))
+        monitor_process.start()
+        self.processes.append(monitor_process)
 
         IP = "10.23.252.4"
         PORT = 514
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((IP, PORT))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((IP, PORT))
 
         logging.info(f"Syslog server started on {IP}:{PORT}")
 
-        for _ in range(self.min_thread_count):
-            self.executor.submit(process_syslog_queue)
-        
-        threading.Thread(target=monitor_queue_size, daemon=True).start()
-
-        while self.is_running:
+        while self.is_running.value:
             try:
-                data, addr = self.sock.recvfrom(8192)
+                data, addr = sock.recvfrom(8192)
                 if not data:
                     break
                 message = data.decode()
@@ -131,12 +128,8 @@ class SyslogService(win32serviceutil.ServiceFramework):
             except Exception as e:
                 logging.error(f"Error receiving syslog message: {e}")
 
-    def write_to_file(self, file_path, content):
-        try:
-            with open(file_path, 'a') as f:
-                f.write(content + '\n')
-        except Exception as e:
-            logging.error(f"Error writing to file {file_path}: {e}")
+        sock.close()
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()  # Necessary for PyInstaller
     win32serviceutil.HandleCommandLine(SyslogService)
