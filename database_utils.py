@@ -1,11 +1,24 @@
 import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
+from psycopg2.pool import ThreadedConnectionPool
 import threading
 import time
 import logging
+import os
+
+# Setup logging
+log_directory = r'C:\Syslog'
+os.makedirs(log_directory, exist_ok=True)
+logging.basicConfig(filename=os.path.join(log_directory, 'database_utils.log'), level=logging.DEBUG,
+                    format='%(asctime)s - %(processName)s - %(threadName)s - %(levelname)s - %(message)s', filemode='a')
 
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/ciscoise"
+
+# Create a connection pool
+min_conn = 5
+max_conn = 20
+connection_pool = ThreadedConnectionPool(min_conn, max_conn, DATABASE_URL)
 
 class BatchedDatabaseInserter:
     def __init__(self, table_name, fields, max_batch_size=200, max_wait_time=60):
@@ -37,9 +50,8 @@ class BatchedDatabaseInserter:
                 self.timer = None
 
             conn = None
-            cursor = None
             try:
-                conn = psycopg2.connect(DATABASE_URL)
+                conn = connection_pool.getconn()
                 cursor = conn.cursor()
 
                 insert_stmt = sql.SQL('INSERT INTO {} ({}) VALUES %s').format(
@@ -52,14 +64,12 @@ class BatchedDatabaseInserter:
                 logging.info(f"Inserted {len(self.batch)} rows into {self.table_name}")
             except Exception as error:
                 logging.error(f"Error inserting batch data into {self.table_name}: {error}")
-                if cursor:
-                    cursor.execute("ROLLBACK")
-                    conn.commit()
-            finally:
-                if cursor:
-                    cursor.close()
                 if conn:
-                    conn.close()
+                    conn.rollback()
+            finally:
+                if conn:
+                    cursor.close()
+                    connection_pool.putconn(conn)
 
             self.batch = []
             self.last_insert_time = time.time()
@@ -86,3 +96,7 @@ def log_batch_status():
     for name, inserter in [('fta', fta_inserter), ('fwa', fwa_inserter), ('fla', fla_inserter), 
                            ('pwa', pwa_inserter), ('pla', pla_inserter), ('tca', tca_inserter)]:
         logging.info(f"Batch size for {name}: {inserter.get_batch_size()}")
+
+def cleanup_connections():
+    connection_pool.closeall()
+    logging.info("All database connections closed.")
