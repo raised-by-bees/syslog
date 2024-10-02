@@ -15,7 +15,7 @@ class SyslogService:
         self.max_queue_size = 100000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
         self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
-        self.num_processes = multiprocessing.cpu_count()
+        self.num_processes = max(1, multiprocessing.cpu_count() - 1)  # Leave one core for the main process
         self.flush_interval = 5
         self.processes = []
 
@@ -26,7 +26,7 @@ class SyslogService:
                             format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s', filemode='a')
         logging.info("Logging started")
 
-    def process_syslog_queue(self):
+    def process_syslog_messages(self):
         while self.is_running.value:
             try:
                 ip, message = self.message_queue.get(timeout=1)
@@ -37,15 +37,19 @@ class SyslogService:
                 logging.error(f"Error processing syslog message: {e}")
 
     def monitor_queue_size(self):
+        last_log_time = 0
         while self.is_running.value:
+            current_time = time.time()
             queue_size = self.message_queue.qsize()
-            logging.info(f"Current queue size: {queue_size}")
             
-            try:
-                with open(self.queue_monitoring_file, 'a') as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
-            except Exception as e:
-                logging.error(f"Error writing to queue monitoring file: {e}")
+            if current_time - last_log_time >= 10:  # Log every 10 seconds
+                logging.info(f"Current queue size: {queue_size}")
+                try:
+                    with open(self.queue_monitoring_file, 'a') as f:
+                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
+                    last_log_time = current_time
+                except Exception as e:
+                    logging.error(f"Error writing to queue monitoring file: {e}")
             
             # Perform maintenance tasks
             maintenance()
@@ -55,14 +59,14 @@ class SyslogService:
                 flush_all_batches()
                 log_batch_status()
             
-            time.sleep(10)  # Check every 10 seconds
+            time.sleep(1)  # Check every second, but only log every 10 seconds
 
     def start_syslog_server(self):
         self.setup_logging()
 
         # Start worker processes
         for _ in range(self.num_processes):
-            p = multiprocessing.Process(target=self.process_syslog_queue)
+            p = multiprocessing.Process(target=self.process_syslog_messages)
             p.start()
             self.processes.append(p)
 
