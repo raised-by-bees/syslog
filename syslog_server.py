@@ -22,21 +22,25 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.is_running = True
         self.setup_logging()
         self.message_queue = queue.Queue()
-        self.max_queue_size = 20000  # Increased from 10000
+        self.max_queue_size = 20000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
         self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
         self.min_thread_count = 152
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.min_thread_count)
-        self.flush_interval = 30  # 30 seconds
+        self.max_thread_count = 300  # Add a maximum thread count
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_thread_count)
+        self.flush_interval = 30
         self.last_logged_size = 0
 
     def setup_logging(self):
-        log_directory = r'C:\\Syslog'
+        log_directory = r'C:\Syslog'
         log_filename = 'syslogService.txt'
         os.makedirs(log_directory, exist_ok=True)
-        logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.INFO,
+        logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
                             format='%(asctime)s - %(levelname)s - %(message)s', filemode='a')
-        logging.info(f"Logging started")
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        logging.getLogger('').addHandler(console)
+        logging.info("Logging started")
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
@@ -50,24 +54,16 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.executor.shutdown(wait=True)
         win32event.SetEvent(self.hWaitStop)
 
-    def start_syslog_server(self, enable_file_logging=True):
-        def write_syslog_to_file(directory, filename, message):
-            if enable_file_logging:
-                os.makedirs(directory, exist_ok=True)
-                file_path = os.path.join(directory, filename)
-                with open(file_path, 'a') as file:
-                    file.write(message + '\n')
-
+    def start_syslog_server(self):
         def process_syslog_queue():
             while self.is_running:
                 try:
                     addr, message = self.message_queue.get(timeout=1)
-                    logging.debug(f"Processing message: {message[:100]}...")  # Log first 100 chars
+                    logging.debug(f"Processing message from {addr}")
                     try:
                         handle_syslog(addr, message)
                     except Exception as e:
                         logging.error(f"Error processing syslog message: {e}")
-                        logging.error(f"Message: {message[:500]}...")  # Log first 500 chars of the message
                     finally:
                         self.message_queue.task_done()
                 except queue.Empty:
@@ -78,29 +74,19 @@ class SyslogService(win32serviceutil.ServiceFramework):
 
         def monitor_queue_size():
             while self.is_running:
-                tcnt = threading.active_count()
-                logging.info(f"Active thread count: {tcnt}")
+                active_threads = len([t for t in threading.enumerate() if t.is_alive() and t != threading.current_thread()])
+                queue_size = self.message_queue.qsize()
                 
-                threads_to_start = self.min_thread_count - tcnt
-                if threads_to_start > 0:
-                    logging.warning(f"Thread count dropped to {tcnt}. Starting {threads_to_start} new threads.")
+                logging.info(f"Active threads: {active_threads}, Queue size: {queue_size}")
+                
+                self.write_to_file(self.thread_monitoring_file, f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count: {active_threads}")
+                self.write_to_file(self.queue_monitoring_file, f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}")
+                
+                if active_threads < self.min_thread_count:
+                    threads_to_start = min(self.min_thread_count - active_threads, self.max_thread_count - active_threads)
+                    logging.warning(f"Starting {threads_to_start} new threads")
                     for _ in range(threads_to_start):
                         self.executor.submit(process_syslog_queue)
-                
-                try:
-                    with open(self.thread_monitoring_file, 'a') as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count: {tcnt}\n")
-                except Exception as e:
-                    logging.error(f"Error writing to thread monitoring file: {e}")
-               
-                queue_size = self.message_queue.qsize()
-                if queue_size > 0 or queue_size != self.last_logged_size:
-                    try:
-                        with open(self.queue_monitoring_file, 'a') as f:
-                            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}\n")
-                        self.last_logged_size = queue_size
-                    except Exception as e:
-                        logging.error(f"Error writing to queue monitoring file: {e}")
                 
                 time.sleep(10)
 
@@ -109,7 +95,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
                 time.sleep(self.flush_interval)
                 try:
                     flush_all_batches()
-                    log_batch_status()  # New function to log batch status
+                    log_batch_status()
                     logging.info(f"Periodic flush completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
                 except Exception as e:
                     logging.error(f"Error during periodic flush: {e}")
@@ -140,6 +126,13 @@ class SyslogService(win32serviceutil.ServiceFramework):
                     logging.warning(f"Message queue is full. Dropping message from {addr[0]}.")
             except Exception as e:
                 logging.error(f"Error receiving syslog message: {e}")
+
+    def write_to_file(self, file_path, content):
+        try:
+            with open(file_path, 'a') as f:
+                f.write(content + '\n')
+        except Exception as e:
+            logging.error(f"Error writing to file {file_path}: {e}")
 
 if __name__ == '__main__':
     win32serviceutil.HandleCommandLine(SyslogService)
