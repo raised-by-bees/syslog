@@ -4,14 +4,13 @@ import logging
 from datetime import datetime
 from database_utils import pwa_inserter, pla_inserter
 
-def handle_cisco_ise_passed_attempts(ip, message):
-    output_dir = 'c:/syslog'
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-   
-    file_path = os.path.join(output_dir, 'passed_not_WLC_not_switch.txt')
-   
-    # Define the fields and their regex patterns
+# Setup logging
+log_directory = r'C:\Syslog'
+os.makedirs(log_directory, exist_ok=True)
+logging.basicConfig(filename=os.path.join(log_directory, 'cisco_ise_passed_attempts_handler.log'), level=logging.DEBUG,
+                    format='%(asctime)s - %(processName)s - %(threadName)s - %(levelname)s - %(message)s', filemode='a')
+
+def parse_syslog_message(message):
     common_field_patterns = {
         'NAS-IP-Address': r'NAS-IP-Address=(.*?),[\s<]',
         'NAS-Port-Id': r'NAS-Port-Id=(.*?),[\s<]',
@@ -43,51 +42,46 @@ def handle_cisco_ise_passed_attempts(ip, message):
         'cisco-av-pair=ACS': r'cisco-av-pair=ACS:(.*?);[\s<]'
     }
 
-    # Additional fields for specific conditions
     wlc_field_patterns = {
         'Called-Station-ID': r'Called-Station-ID=([^,:]+)',
         'RadiusFlowType': r'RadiusFlowType=(.*?),[\s<]'
     }
 
-    switch_field_patterns = {}
-
-    #first things first
     extracted_fields = {}
-    extracted_fields['source_ip'] = ip #add source ip
-    timestamp = re.search(r'\d* \d* (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d* \+\d{2}:\d{2})', message) #pull timestamp from message, if not present in this format create timestamp with current time
-    if timestamp:
-        extracted_fields['timestamp'] = timestamp.group(1)
-    else:
-        extracted_fields['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    # Extract the fields using regex
     for key, pattern in common_field_patterns.items():
         matches = re.findall(pattern, message)
         if matches:
-            # Handle the case where there might be multiple values
             if len(matches) > 1:
                 try:
-                    if key=='UserName': #username field
-                        matches= list(map(lambda x: x.replace("-","").lower(),matches)) #replace - and set to lower case
-                    uniqueMatches=list(set(matches)) #change list to set to remove duplicates
-
+                    if key == 'UserName':
+                        matches = list(map(lambda x: x.replace("-", "").lower(), matches))
+                    uniqueMatches = list(set(matches))
                     if len(uniqueMatches) > 1:
                         extracted_fields[key] = ", ".join(uniqueMatches)
                     else:
                         extracted_fields[key] = uniqueMatches[0]
                 except Exception as error:
-                    logging.error(f"change matches to a set: {error}")
+                    logging.error(f"Error processing matches for {key}: {error}")
             else:
                 extracted_fields[key] = matches[0]
 
-    # Check for WLC specific fields
     if 'NetworkDeviceName' in extracted_fields and 'WLC' in extracted_fields['NetworkDeviceName']:
         for key, pattern in wlc_field_patterns.items():
             matches = re.findall(pattern, message)
             if matches:
                 extracted_fields[key] = matches[0]
 
-        row_data = [
+    timestamp = re.search(r'\d* \d* (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d* \+\d{2}:\d{2})', message)
+    extracted_fields['timestamp'] = timestamp.group(1) if timestamp else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    return extracted_fields
+
+def handle_cisco_ise_passed_attempts(ip, message):
+    extracted_fields = parse_syslog_message(message)
+    extracted_fields['source_ip'] = ip
+
+    if 'NetworkDeviceName' in extracted_fields and 'WLC' in extracted_fields['NetworkDeviceName']:
+        pwa_inserter.add_to_batch([
             extracted_fields.get('timestamp'),
             extracted_fields.get('source_ip'),
             extracted_fields.get('NAS-IP-Address'),
@@ -119,17 +113,10 @@ def handle_cisco_ise_passed_attempts(ip, message):
             extracted_fields.get('DeviceIP'),
             extracted_fields.get('Called-Station-ID'),
             extracted_fields.get('RadiusFlowType')
-        ]
-        pwa_inserter.add_to_batch(tuple(row_data))
-
-    # Check for switch specific fields
+        ])
+        logging.info(f"Added PWA record for {ip}")
     elif 'NetworkDeviceGroups=Device=' in extracted_fields and 'switch' in extracted_fields['NetworkDeviceGroups=Device=']:
-        for key, pattern in switch_field_patterns.items():
-            matches = re.findall(pattern, message)
-            if matches:
-                extracted_fields[key] = matches[0]
-
-        row_data = [
+        pla_inserter.add_to_batch([
             extracted_fields.get('timestamp'),
             extracted_fields.get('source_ip'),
             extracted_fields.get('NAS-IP-Address'),
@@ -160,13 +147,9 @@ def handle_cisco_ise_passed_attempts(ip, message):
             extracted_fields.get('Session-Timeout'),
             extracted_fields.get('cisco-av-pair=ACS'),
             extracted_fields.get('DeviceIP')
-        ]
-        pla_inserter.add_to_batch(tuple(row_data))
-
+        ])
+        logging.info(f"Added PLA record for {ip}")
     else:
-        # Write the extracted fields to the file
-        try:
-            with open(file_path, 'a') as file:
-                file.write(message)  # Separate entries by a new line
-        except Exception as error:
-            logging.error(f"Error writing syslog to file: {error}")
+        logging.warning(f"Unhandled passed attempt message from {ip}")
+
+    logging.debug(f"Processed passed attempt message from {ip}")
