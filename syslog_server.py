@@ -27,7 +27,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.thread_monitoring_file = r"C:\Syslog\thread_count.txt"
         self.min_thread_count = 152
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.min_thread_count)
-        self.flush_interval = 300  # 5 minutes
+        self.flush_interval = 30  # 5 minutes
 
     def setup_logging(self):
         log_directory = r'C:\\Syslog'
@@ -60,6 +60,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
             while self.is_running:
                 try:
                     addr, message = self.message_queue.get(timeout=1)
+                    logging.info(f"processing message: {message}")
                     try:
                         handle_syslog(addr, message)
                     except Exception as e:
@@ -76,13 +77,14 @@ class SyslogService(win32serviceutil.ServiceFramework):
         def monitor_queue_size():
             while self.is_running:
                 tcnt = threading.active_count()
-                if tcnt < self.min_thread_count:
-                    threads_to_start = self.min_thread_count - tcnt
-                    logging.warning(f"Thread count dropped to {tcnt}. Starting {threads_to_start} new threads.")
-                    for _ in range(threads_to_start):
-                        self.executor.submit(process_syslog_queue)
-                    with open(self.thread_monitoring_file, 'a') as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count Before Replenishment: {tcnt}\n")
+                logging.info(tcnt)
+                
+                threads_to_start = self.min_thread_count - tcnt
+                logging.warning(f"Thread count dropped to {tcnt}. Starting {threads_to_start} new threads.")
+                for _ in range(threads_to_start):
+                    self.executor.submit(process_syslog_queue)
+                with open(self.thread_monitoring_file, 'a') as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Thread Count Before Replenishment: {tcnt}\n")
                
                 queue_size = self.message_queue.qsize()
                 if queue_size > 0 and queue_size != self.last_logged_size:
@@ -100,7 +102,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
                 except Exception as e:
                     logging.error(f"Error during periodic flush: {e}")
 
-        IP = "10.23.252.3"
+        IP = "10.23.252.4"
         PORT = 514
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
