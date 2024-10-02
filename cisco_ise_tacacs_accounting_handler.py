@@ -4,46 +4,44 @@ import re
 import os
 from database_utils import tca_inserter
 
+# Setup logging
+log_directory = r'C:\Syslog'
+os.makedirs(log_directory, exist_ok=True)
+logging.basicConfig(filename=os.path.join(log_directory, 'cisco_ise_tacacs_accounting_handler.log'), level=logging.DEBUG,
+                    format='%(asctime)s - %(processName)s - %(threadName)s - %(levelname)s - %(message)s', filemode='a')
+
 def parse_syslog_message(message):
     data = {}
-    user_name_search = re.search(r'User=([^,]+)', message)
-    if user_name_search:
-        data['Username'] = user_name_search.group(1)
+    patterns = {
+        'Username': r'User=([^,]+)',
+        'NetworkDeviceName': r'NetworkDeviceName=([^,]+)',
+        'NetworkDeviceIP': r'Device IP Address=([^,]+)',
+        'RemoteDevice': r'Remote-Address=([^,]+)',
+        'CmdSet': r'CmdSet=\[ CmdAV=([^,]+) ]',
+        'timestamp': r'\d* \d* (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d* \+\d{2}:\d{2})'
+    }
 
-    device_search = re.search(r'NetworkDeviceName=([^,]+)', message)
-    if device_search:
-        data['NetworkDeviceName'] = device_search.group(1)
-
-    device_ip_search = re.search(r'Device IP Address=([^,]+)', message)
-    if device_ip_search:
-        data['NetworkDeviceIP'] = device_ip_search.group(1)
-
-    RemoteAddr_search = re.search(r'Remote-Address=([^,]+)', message)
-    if RemoteAddr_search:
-        data['RemoteDevice'] = RemoteAddr_search.group(1)
-
-    commands = re.search(r'CmdSet=\[ CmdAV=([^,]+) ]', message)
-    if commands:
-        data['CmdSet'] = commands.group(1).replace("CmdArgAV=", "",)
+    for key, pattern in patterns.items():
+        match = re.search(pattern, message)
+        if match:
+            data[key] = match.group(1)
     
-    timestamp = re.search(r'\d* \d* (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d* \+\d{2}:\d{2})', message)
-    if timestamp:
-        data['timestamp'] = timestamp.group(1)
-    else:
+    if 'CmdSet' in data:
+        data['CmdSet'] = data['CmdSet'].replace("CmdArgAV=", "")
+    
+    if 'timestamp' not in data:
         data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     return data
 
 def handle_cisco_ise_tacacs_accounting(ip, message):
     log_data = parse_syslog_message(message)
-    log_directory = r'C:\\Syslog\\syslog2.0'
-    log_filename = 'tacacs_accounting.txt'
-    with open(log_directory + '\\' + log_filename, 'a') as file:
-        file.write(str(log_data) + '\n')
-    logging.info("Logged TACACS accounting message")
+    
+    # Log the parsed data for debugging
+    logging.debug(f"Parsed TACACS accounting message: {log_data}")
 
     if 'terminal pager 0' not in log_data.get('CmdSet', ''):
-        row_data = [
+        tca_inserter.add_to_batch([
             log_data.get('timestamp'),
             log_data.get('Username'),
             log_data.get('NetworkDeviceName'),
@@ -51,5 +49,9 @@ def handle_cisco_ise_tacacs_accounting(ip, message):
             log_data.get('RemoteDevice'),
             log_data.get('CmdSet'),
             ip
-        ]
-        tca_inserter.add_to_batch(tuple(row_data))
+        ])
+        logging.info(f"Added TACACS accounting record for {ip}")
+    else:
+        logging.debug(f"Ignored 'terminal pager 0' command from {ip}")
+
+    logging.info("Processed TACACS accounting message")
