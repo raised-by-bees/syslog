@@ -1,42 +1,22 @@
-2024-10-02 11:12:18,351 - INFO - Ignoring rejected message from 10.23.18.223
-2024-10-02 11:12:18,354 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,355 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,356 - INFO - Full message joined: 0001067905
-2024-10-02 11:12:18,367 - DEBUG - Processing message from 10.23.18.223
-2024-10-02 11:12:18,367 - INFO - Full message joined: 0004959532
-2024-10-02 11:12:18,367 - INFO - Ignoring rejected message from 10.23.18.223
-2024-10-02 11:12:18,386 - DEBUG - Processing message from 10.24.18.223
-2024-10-02 11:12:18,387 - INFO - Full message joined: 0001341487
-2024-10-02 11:12:18,387 - INFO - Ignoring rejected message from 10.24.18.223
-2024-10-02 11:12:18,398 - DEBUG - Processing message from 10.23.18.223
-2024-10-02 11:12:18,399 - INFO - Full message joined: 0004959533
-2024-10-02 11:12:18,399 - INFO - Ignoring rejected message from 10.23.18.223
-2024-10-02 11:12:18,407 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,408 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.220
-2024-10-02 11:12:18,409 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,410 - INFO - Full message joined: 0001327572
-2024-10-02 11:12:18,410 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,411 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,411 - DEBUG - Processing message from 10.23.18.221
-2024-10-02 11:12:18,411 - INFO - Full message joined: 0001067906
-2024-10-02 11:12:24,160 - INFO - Active threads: 205, Queue size: 1975
-2024-10-02 11:12:34,164 - INFO - Active threads: 205, Queue size: 5622
-2024-10-02 11:12:44,173 - INFO - Active threads: 205, Queue size: 9085
-2024-10-02 11:12:54,178 - INFO - Active threads: 205, Queue size: 12402
-2024-10-02 11:13:04,190 - INFO - Active threads: 205, Queue size: 15519
-2024-10-02 11:13:04,496 - INFO - Inserted 116 rows into pla
-2024-10-02 11:13:04,746 - INFO - Inserted 18 rows into pwa
-2024-10-02 11:13:05,287 - INFO - Inserted 4 rows into fwa
-2024-10-02 11:13:14,194 - INFO - Active threads: 202, Queue size: 18477
-2024-10-02 11:13:24,252 - INFO - Active threads: 202, Queue size: 22048
-2024-10-02 11:13:34,261 - INFO - Active threads: 202, Queue size: 25281
-2024-10-02 11:13:44,276 - INFO - Active threads: 202, Queue size: 28662
-2024-10-02 11:13:54,279 - INFO - Active threads: 202, Queue size: 32029
-2024-10-02 11:14:04,296 - INFO - Active threads: 202, Queue size: 35535
-2024-10-02 11:14:14,306 - INFO - Active threads: 202, Queue size: 37750
+
+C:\Syslog\Syslog2.0>python syslog_server.py update
+Traceback (most recent call last):
+  File "C:\Syslog\Syslog2.0\syslog_server.py", line 7, in <module>
+    from handler_dispatcher import handle_syslog
+  File "C:\Syslog\Syslog2.0\handler_dispatcher.py", line 4, in <module>
+    from handlers.cisco_ise_handler import handle_cisco_ise_syslog
+  File "C:\Syslog\Syslog2.0\handlers\cisco_ise_handler.py", line 4, in <module>
+    from handlers.cisco_ise_failed_attempts_handler import handle_cisco_ise_failed_attempts
+  File "C:\Syslog\Syslog2.0\handlers\cisco_ise_failed_attempts_handler.py", line 4, in <module>
+    from database_utils import fta_inserter, fwa_inserter, fla_inserter
+  File "C:\Syslog\Syslog2.0\database_utils.py", line 21, in <module>
+    connection_pool = ThreadedConnectionPool(min_conn, max_conn, DATABASE_URL)
+  File "C:\Program Files\Python310\lib\site-packages\psycopg2\pool.py", line 161, in __init__
+    AbstractConnectionPool.__init__(
+  File "C:\Program Files\Python310\lib\site-packages\psycopg2\pool.py", line 59, in __init__
+    self._connect()
+  File "C:\Program Files\Python310\lib\site-packages\psycopg2\pool.py", line 63, in _connect
+    conn = psycopg2.connect(*self._args, **self._kwargs)
+  File "C:\Program Files\Python310\lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
