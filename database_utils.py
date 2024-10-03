@@ -35,8 +35,8 @@ class BatchedDatabaseInserter:
         with self.lock:
             self.batch.append(row_data)
             if len(self.batch) >= self.max_batch_size:
-                logging.error(f"Max Batch Size Hit!!!")
-                self._insert_batch()
+                logging.info(f"Max Batch Size Hit for {self.table_name}. Inserting batch.")
+                threading.Thread(target=self._insert_batch).start()
             elif self.timer is None:
                 self.timer = threading.Timer(60.0, self._insert_batch)
                 self.timer.start()
@@ -50,30 +50,32 @@ class BatchedDatabaseInserter:
                 self.timer.cancel()
                 self.timer = None
 
-            conn = None
-            try:
-                conn = connection_pool.getconn()
-                cursor = conn.cursor()
-
-                insert_stmt = sql.SQL('INSERT INTO {} ({}) VALUES %s').format(
-                    sql.Identifier(self.table_name),
-                    sql.SQL(', ').join(map(sql.Identifier, self.fields))
-                )
-
-                psycopg2.extras.execute_values(cursor, insert_stmt, self.batch)
-                conn.commit()
-                logging.info(f"Inserted {len(self.batch)} rows into {self.table_name}")
-            except Exception as error:
-                logging.error(f"Error inserting batch data into {self.table_name}: {error}")
-                if conn:
-                    conn.rollback()
-            finally:
-                if conn:
-                    cursor.close()
-                    connection_pool.putconn(conn)
-
+            batch_to_insert = self.batch
             self.batch = []
-            self.last_insert_time = time.time()
+
+        conn = None
+        try:
+            conn = connection_pool.getconn()
+            cursor = conn.cursor()
+
+            insert_stmt = sql.SQL('INSERT INTO {} ({}) VALUES %s').format(
+                sql.Identifier(self.table_name),
+                sql.SQL(', ').join(map(sql.Identifier, self.fields))
+            )
+
+            psycopg2.extras.execute_values(cursor, insert_stmt, batch_to_insert)
+            conn.commit()
+            logging.info(f"Inserted {len(batch_to_insert)} rows into {self.table_name}")
+        except Exception as error:
+            logging.error(f"Error inserting batch data into {self.table_name}: {error}")
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                connection_pool.putconn(conn)
+
+        self.last_insert_time = time.time()
 
     def flush(self):
         self._insert_batch()
