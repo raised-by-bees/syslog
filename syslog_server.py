@@ -16,7 +16,7 @@ def setup_logging(process_name):
     log_filename = f'syslogService_{process_name}.txt'
     os.makedirs(log_directory, exist_ok=True)
     logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
-                        format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s', filemode='a')
+                        format='%(asctime)s - %(processName)s - %(threadName)s - %(levelname)s - %(message)s', filemode='a')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     logging.getLogger('').addHandler(console)
