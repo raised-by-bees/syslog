@@ -1,18 +1,50 @@
 graph TD
-    A[Receive Syslog Message] --> B[Queue Message]
-    B --> C{Process Message}
-    C --> D[Parse Message]
-    D --> E{Determine Message Type}
-    E --> F[Failed Attempts]
-    E --> G[TACACS Accounting]
-    E --> H[Passed Authentications]
-    F --> I[Insert into FTA/FWA/FLA]
-    G --> J[Insert into TCA]
-    H --> K[Insert into PWA/PLA]
-    I --> L[Add to Batch]
+    A[Receive Syslog Message]
+    B[Queue Message]
+    C{Process Message}
+    D[Parse Message]
+    E{Determine Message Type}
+    F[Failed Attempts]
+    G[TACACS Accounting]
+    H[Passed Authentications]
+    I[Insert into FTA/FWA/FLA]
+    J[Insert into TCA]
+    K[Insert into PWA/PLA]
+    L[Add to Batch]
+    M{Batch Full or Timer Expired?}
+    N[Flush Batch to Database]
+    O[Wait for More Messages]
+
+    A -->|"Queue for processing"| B
+    B -->|"Retrieve from queue"| C
+    C -->|"Extract information"| D
+    D -->|"Categorize message"| E
+    E -->|"Handle failed login"| F
+    E -->|"Process admin commands"| G
+    E -->|"Handle successful login"| H
+    F -->|"Prepare for DB insertion"| I
+    G -->|"Prepare for DB insertion"| J
+    H -->|"Prepare for DB insertion"| K
+    I --> L
     J --> L
     K --> L
-    L --> M{Batch Full or Timer Expired?}
-    M -->|Yes| N[Flush Batch to Database]
-    M -->|No| O[Wait for More Messages]
-    O --> C
+    L -->|"Check batch status"| M
+    M -->|"Insert data"| N
+    M -->|"Continue processing"| O
+    O -->|"Process next message"| C
+
+    click A href "#" title "syslog_server.py receives UDP packet on port 514"
+    click B href "#" title "Message added to multiprocessing Queue with sender's IP"
+    click C href "#" title "Worker process retrieves message from queue"
+    click D href "#" title "handle_syslog function determines appropriate handler"
+    click E href "#" title "Message content examined to determine specific type"
+    click F href "#" title "handle_cisco_ise_failed_attempts processes failed logins"
+    click G href "#" title "handle_cisco_ise_tacacs_accounting processes admin commands"
+    click H href "#" title "handle_cisco_ise_passed_attempts processes successful logins"
+    click I href "#" title "Data formatted for Failed Attempts tables (FTA/FWA/FLA)"
+    click J href "#" title "Data formatted for TACACS Accounting table (TCA)"
+    click K href "#" title "Data formatted for Passed Authentication tables (PWA/PLA)"
+    click L href "#" title "Data added to BatchedDatabaseInserter's batch"
+    click M href "#" title "Check if batch size reached max or wait time exceeded"
+    click N href "#" title "Execute SQL to insert all batched data into database"
+    click O href "#" title "Return to processing queue if batch not ready for insert"
