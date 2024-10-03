@@ -15,7 +15,7 @@ def setup_logging(process_name):
     log_directory = r'C:\Syslog'
     log_filename = f'syslogService_{process_name}.txt'
     os.makedirs(log_directory, exist_ok=True)
-    logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
+    logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.WARN,
                         format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s', filemode='a')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
@@ -67,7 +67,7 @@ def process_syslog_queue(message_queue, is_running, flush_interval):
         except Exception as e:
             logging.error(f"Unexpected error in process_syslog_queue: {e}")
             time.sleep(1)
-            
+
 def monitor_queue_size(message_queue, is_running, queue_monitoring_file):
     setup_logging("Monitor")
     while is_running.value:
@@ -91,8 +91,8 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.message_queue = multiprocessing.Queue()
         self.max_queue_size = 100000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
-        self.num_processes = multiprocessing.cpu_count()
-        self.flush_interval = 5
+        self.num_processes = 1#multiprocessing.cpu_count()
+        self.flush_interval = 60
         self.processes = []
 
     def SvcDoRun(self):
