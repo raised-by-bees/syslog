@@ -1,19 +1,19 @@
 graph TD
-    A[Receive Syslog Message]
-    B[Queue Message]
-    C{Process Message}
-    D[Parse Message]
-    E{Determine Message Type}
-    F[Failed Attempts]
-    G[TACACS Accounting]
-    H[Passed Authentications]
-    I[Insert into FTA/FWA/FLA]
-    J[Insert into TCA]
-    K[Insert into PWA/PLA]
-    L[Add to Batch]
-    M{Batch Full or Timer Expired?}
-    N[Flush Batch to Database]
-    O[Wait for More Messages]
+    A["Receive Syslog Message"]
+    B["Queue Message"]
+    C{"Process Message"}
+    D["Parse Message"]
+    E{"Determine Message Type"}
+    F["Failed Attempts"]
+    G["TACACS Accounting"]
+    H["Passed Authentications"]
+    I["Insert into FTA/FWA/FLA"]
+    J["Insert into TCA"]
+    K["Insert into PWA/PLA"]
+    L["Add to Batch"]
+    M{"Batch Full or Timer Expired?"}
+    N["Flush Batch to Database"]
+    O["Wait for More Messages"]
 
     A -->|"Queue for processing"| B
     B -->|"Retrieve from queue"| C
@@ -33,18 +33,35 @@ graph TD
     M -->|"Continue processing"| O
     O -->|"Process next message"| C
 
-    click A href "#" title "syslog_server.py receives UDP packet on port 514"
-    click B href "#" title "Message added to multiprocessing Queue with sender's IP"
-    click C href "#" title "Worker process retrieves message from queue"
-    click D href "#" title "handle_syslog function determines appropriate handler"
-    click E href "#" title "Message content examined to determine specific type"
-    click F href "#" title "handle_cisco_ise_failed_attempts processes failed logins"
-    click G href "#" title "handle_cisco_ise_tacacs_accounting processes admin commands"
-    click H href "#" title "handle_cisco_ise_passed_attempts processes successful logins"
-    click I href "#" title "Data formatted for Failed Attempts tables (FTA/FWA/FLA)"
-    click J href "#" title "Data formatted for TACACS Accounting table (TCA)"
-    click K href "#" title "Data formatted for Passed Authentication tables (PWA/PLA)"
-    click L href "#" title "Data added to BatchedDatabaseInserter's batch"
-    click M href "#" title "Check if batch size reached max or wait time exceeded"
-    click N href "#" title "Execute SQL to insert all batched data into database"
-    click O href "#" title "Return to processing queue if batch not ready for insert"
+    A:::tooltip
+    B:::tooltip
+    C:::tooltip
+    D:::tooltip
+    E:::tooltip
+    F:::tooltip
+    G:::tooltip
+    H:::tooltip
+    I:::tooltip
+    J:::tooltip
+    K:::tooltip
+    L:::tooltip
+    M:::tooltip
+    N:::tooltip
+    O:::tooltip
+
+    classDef tooltip title:"Click for details"
+    click A callback "syslog_server.py receives UDP packet on port 514"
+    click B callback "Message added to multiprocessing Queue with sender's IP"
+    click C callback "Worker process retrieves message from queue"
+    click D callback "handle_syslog function determines appropriate handler"
+    click E callback "Message content examined to determine specific type"
+    click F callback "handle_cisco_ise_failed_attempts processes failed logins"
+    click G callback "handle_cisco_ise_tacacs_accounting processes admin commands"
+    click H callback "handle_cisco_ise_passed_attempts processes successful logins"
+    click I callback "Data formatted for Failed Attempts tables (FTA/FWA/FLA)"
+    click J callback "Data formatted for TACACS Accounting table (TCA)"
+    click K callback "Data formatted for Passed Authentication tables (PWA/PLA)"
+    click L callback "Data added to BatchedDatabaseInserter's batch"
+    click M callback "Check if batch size reached max or wait time exceeded"
+    click N callback "Execute SQL to insert all batched data into database"
+    click O callback "Return to processing queue if batch not ready for insert"
