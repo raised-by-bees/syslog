@@ -82,7 +82,14 @@ def process_fragment_queue(fragment_queue, processed_queue, is_running):
             if complete_message:
                 processed_queue.put((addr, complete_message))
         except queue.Empty:
-            pass
+            # No new fragments, check for timed-out fragments
+            current_time = time.time()
+            for uid, data in list(message_fragments.items()):
+                if current_time - data['timestamp'] > 30:  # 30 seconds timeout
+                    incomplete_message = ''.join(msg for _, msg in sorted(data['received']))
+                    processed_queue.put((data['ip'], incomplete_message))
+                    logging.warning(f"Incomplete message {uid} from {data['ip']} processed after timeout")
+                    del message_fragments[uid]
         except Exception as e:
             logging.error(f"Unexpected error in process_fragment_queue: {e}")
             time.sleep(1)
@@ -99,6 +106,29 @@ def monitor_queue_size(message_queue, fragment_queue, is_running, queue_monitori
         except Exception as e:
             logging.error(f"Error writing to queue monitoring file: {e}")
         time.sleep(5)
+
+class ProcessManager:
+    def __init__(self, target, args, name):
+        self.target = target
+        self.args = args
+        self.name = name
+        self.process = None
+
+    def start(self):
+        self.process = multiprocessing.Process(target=self.target, args=self.args, name=self.name)
+        self.process.start()
+
+    def is_alive(self):
+        return self.process.is_alive() if self.process else False
+
+    def terminate(self):
+        if self.process:
+            self.process.terminate()
+            self.process.join(timeout=5)
+
+    def restart(self):
+        self.terminate()
+        self.start()
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -125,33 +155,35 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         self.is_running.value = False
         for process in self.processes:
-            process.join(timeout=5)
-            if process.is_alive():
-                process.terminate()
+            process.terminate()
         cleanup_connections()  # Ensure database connections are closed
         win32event.SetEvent(self.hWaitStop)
 
     def start_syslog_server(self):
         setup_logging("Main")
 
-        # Start worker processes
-        for _ in range(self.num_processes):
-            p = multiprocessing.Process(target=process_syslog_queue, 
-                                        args=(self.message_queue, self.fragment_queue, self.processed_queue, self.is_running, self.flush_interval))
-            p.start()
-            self.processes.append(p)
+        # Create process managers
+        worker_process = ProcessManager(
+            target=process_syslog_queue,
+            args=(self.message_queue, self.fragment_queue, self.processed_queue, self.is_running, self.flush_interval),
+            name="Worker"
+        )
+        fragment_process = ProcessManager(
+            target=process_fragment_queue,
+            args=(self.fragment_queue, self.processed_queue, self.is_running),
+            name="FragmentStitcher"
+        )
+        monitor_process = ProcessManager(
+            target=monitor_queue_size,
+            args=(self.message_queue, self.fragment_queue, self.is_running, self.queue_monitoring_file),
+            name="Monitor"
+        )
 
-        # Start fragment stitching process
-        fragment_process = multiprocessing.Process(target=process_fragment_queue,
-                                                   args=(self.fragment_queue, self.processed_queue, self.is_running))
-        fragment_process.start()
-        self.processes.append(fragment_process)
+        self.processes = [worker_process, fragment_process, monitor_process]
 
-        # Start monitoring process
-        monitor_process = multiprocessing.Process(target=monitor_queue_size, 
-                                                  args=(self.message_queue, self.fragment_queue, self.is_running, self.queue_monitoring_file))
-        monitor_process.start()
-        self.processes.append(monitor_process)
+        # Start all processes
+        for process in self.processes:
+            process.start()
 
         IP = "10.23.252.4"
         PORT = 514
@@ -171,6 +203,13 @@ class SyslogService(win32serviceutil.ServiceFramework):
                     self.message_queue.put((addr[0], message))
                 else:
                     logging.warning(f"Message queue is full. Dropping message from {addr[0]}.")
+
+                # Check if processes are alive, restart if necessary
+                for process in self.processes:
+                    if not process.is_alive():
+                        logging.warning(f"Process {process.name} died. Restarting...")
+                        process.restart()
+
             except Exception as e:
                 logging.error(f"Error receiving syslog message: {e}")
 
