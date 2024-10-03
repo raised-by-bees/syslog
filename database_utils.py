@@ -16,8 +16,8 @@ logging.basicConfig(filename=os.path.join(log_directory, 'database_utils.log'), 
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/ciscoise"
 
 # Create a connection pool
-min_conn = 5
-max_conn = 20
+min_conn = 1
+max_conn = 10
 connection_pool = ThreadedConnectionPool(min_conn, max_conn, DATABASE_URL)
 
 class BatchedDatabaseInserter:
@@ -35,9 +35,10 @@ class BatchedDatabaseInserter:
         with self.lock:
             self.batch.append(row_data)
             if len(self.batch) >= self.max_batch_size:
+                logging.error(f"Max Batch Size Hit!!!")
                 self._insert_batch()
             elif self.timer is None:
-                self.timer = threading.Timer(self.max_wait_time, self._insert_batch)
+                self.timer = threading.Timer(60.0, self._insert_batch)
                 self.timer.start()
 
     def _insert_batch(self):
