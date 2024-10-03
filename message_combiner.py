@@ -2,7 +2,7 @@ import re
 import logging
 import time
 
-MESSAGE_TIMEOUT = 60
+MESSAGE_TIMEOUT = 30  # Reduced from 60 to 30 seconds
 
 def chunKing(addr, message_fragments, message):
     try:
@@ -27,15 +27,13 @@ def chunKing(addr, message_fragments, message):
                 del message_fragments[unique_id]
                 return full_message
             else:
+                # Check for timed-out fragments
                 current_time = time.time()
-                for uid, data in list(message_fragments.items()):
-                    if not data['complete']:
-                        if current_time - data['timestamp'] > MESSAGE_TIMEOUT:
-                            full_message = ''.join(msg for _, msg in sorted(data['received']))
-                            received_chunks = len(data['received'])
-                            logging.warning(f"{data['ip']} {uid} Fragment waiting over {MESSAGE_TIMEOUT}, received {received_chunks}/{data['total']} chunks, last updated {time.ctime(data['timestamp'])}")
-                            del message_fragments[uid]
-                            return full_message
+                if current_time - message_fragments[unique_id]['timestamp'] > MESSAGE_TIMEOUT:
+                    incomplete_message = ''.join(msg for _, msg in sorted(message_fragments[unique_id]['received']))
+                    logging.warning(f"{addr} {unique_id} Fragment timed out after {MESSAGE_TIMEOUT}s, received {len(message_fragments[unique_id]['received'])}/{total_chunks} chunks")
+                    del message_fragments[unique_id]
+                    return incomplete_message
         else:
             logging.warning(f"No regex match on chunKing {message}")
 
