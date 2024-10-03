@@ -100,13 +100,14 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         self.start_syslog_server()
 
-    def SvcStop(self):
+def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         self.is_running.value = False
         for process in self.processes:
             process.join(timeout=5)
             if process.is_alive():
                 process.terminate()
+        cleanup_connections()  # Add this line to ensure database connections are closed
         win32event.SetEvent(self.hWaitStop)
 
     def start_syslog_server(self):
