@@ -1,67 +1,7 @@
-graph TD
-    A["Receive Syslog Message"]
-    B["Queue Message"]
-    C{"Process Message"}
-    D["Parse Message"]
-    E{"Determine Message Type"}
-    F["Failed Attempts"]
-    G["TACACS Accounting"]
-    H["Passed Authentications"]
-    I["Insert into FTA/FWA/FLA"]
-    J["Insert into TCA"]
-    K["Insert into PWA/PLA"]
-    L["Add to Batch"]
-    M{"Batch Full or Timer Expired?"}
-    N["Flush Batch to Database"]
-    O["Wait for More Messages"]
-
-    A -->|"Queue for processing"| B
-    B -->|"Retrieve from queue"| C
-    C -->|"Extract information"| D
-    D -->|"Categorize message"| E
-    E -->|"Handle failed login"| F
-    E -->|"Process admin commands"| G
-    E -->|"Handle successful login"| H
-    F -->|"Prepare for DB insertion"| I
-    G -->|"Prepare for DB insertion"| J
-    H -->|"Prepare for DB insertion"| K
-    I --> L
-    J --> L
-    K --> L
-    L -->|"Check batch status"| M
-    M -->|"Insert data"| N
-    M -->|"Continue processing"| O
-    O -->|"Process next message"| C
-
-    A:::tooltip
-    B:::tooltip
-    C:::tooltip
-    D:::tooltip
-    E:::tooltip
-    F:::tooltip
-    G:::tooltip
-    H:::tooltip
-    I:::tooltip
-    J:::tooltip
-    K:::tooltip
-    L:::tooltip
-    M:::tooltip
-    N:::tooltip
-    O:::tooltip
-
-    classDef tooltip title:"Click for details"
-    click A callback "syslog_server.py receives UDP packet on port 514"
-    click B callback "Message added to multiprocessing Queue with sender's IP"
-    click C callback "Worker process retrieves message from queue"
-    click D callback "handle_syslog function determines appropriate handler"
-    click E callback "Message content examined to determine specific type"
-    click F callback "handle_cisco_ise_failed_attempts processes failed logins"
-    click G callback "handle_cisco_ise_tacacs_accounting processes admin commands"
-    click H callback "handle_cisco_ise_passed_attempts processes successful logins"
-    click I callback "Data formatted for Failed Attempts tables (FTA/FWA/FLA)"
-    click J callback "Data formatted for TACACS Accounting table (TCA)"
-    click K callback "Data formatted for Passed Authentication tables (PWA/PLA)"
-    click L callback "Data added to BatchedDatabaseInserter's batch"
-    click M callback "Check if batch size reached max or wait time exceeded"
-    click N callback "Execute SQL to insert all batched data into database"
-    click O callback "Return to processing queue if batch not ready for insert"
+Literal Meaning: The function "chunKing" is responsible for handling and reassembling chunks or fragments of messages. It's "king" of managing these chunks, hence "chunKing."
+Wordplay on "Chunking": In computer science and data processing, "chunking" refers to the process of grouping data into smaller parts or "chunks" for more efficient handling. The function name plays on this term.
+Historical Reference: "Chun King" was a popular American brand of canned Chinese food, founded in the 1940s. The name sounds similar to "chunking," creating a multilayered pun.
+Cultural Blend: Just as the Chun King brand represented a fusion of American and Chinese culinary cultures, the "chunKing" function represents a fusion of technical functionality (handling message chunks) and clever wordplay.
+Royal Connotation: "King" implies mastery or supremacy. So "chunKing" playfully suggests that this function is the master of handling chunks.
+Unexpected Context: Finding such a playful pun in a technical context of syslog message processing adds an element of surprise, making it even more amusing.
+Pronunciation: When said aloud, "chunKing" sounds like "chunking," maintaining the technical meaning while visually incorporating the pun.
