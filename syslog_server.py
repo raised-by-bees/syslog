@@ -45,12 +45,29 @@ def process_syslog_queue(message_queue, is_running, flush_interval):
                     logging.info(f"Batch insert completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
                 except Exception as e:
                     logging.error(f"Error during batch insert: {e}")
+                finally:
+                    # Ensure that the database connection is properly released
+                    from database_utils import cleanup_connections
+                    cleanup_connections()
         except queue.Empty:
-            continue
+            # No message in the queue, check if it's time for a flush
+            current_time = time.time()
+            if current_time - last_flush_time >= flush_interval:
+                last_flush_time = current_time
+                try:
+                    flush_all_batches()
+                    log_batch_status()
+                    logging.info(f"Batch insert completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                except Exception as e:
+                    logging.error(f"Error during batch insert: {e}")
+                finally:
+                    # Ensure that the database connection is properly released
+                    from database_utils import cleanup_connections
+                    cleanup_connections()
         except Exception as e:
             logging.error(f"Unexpected error in process_syslog_queue: {e}")
             time.sleep(1)
-
+            
 def monitor_queue_size(message_queue, is_running, queue_monitoring_file):
     setup_logging("Monitor")
     while is_running.value:
