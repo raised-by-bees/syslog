@@ -8,14 +8,14 @@ from handler_dispatcher import handle_syslog
 import multiprocessing
 import queue
 import time
-from database_utils import flush_all_batches, log_batch_status
+from database_utils import flush_all_batches, log_batch_status, cleanup_connections
 import signal
 
 def setup_logging(process_name):
     log_directory = r'C:\Syslog'
     log_filename = f'syslogService_{process_name}.txt'
     os.makedirs(log_directory, exist_ok=True)
-    logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.WARN,
+    logging.basicConfig(filename=os.path.join(log_directory, log_filename), level=logging.DEBUG,
                         format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s', filemode='a')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
@@ -47,7 +47,6 @@ def process_syslog_queue(message_queue, is_running, flush_interval):
                     logging.error(f"Error during batch insert: {e}")
                 finally:
                     # Ensure that the database connection is properly released
-                    from database_utils import cleanup_connections
                     cleanup_connections()
         except queue.Empty:
             # No message in the queue, check if it's time for a flush
@@ -62,11 +61,13 @@ def process_syslog_queue(message_queue, is_running, flush_interval):
                     logging.error(f"Error during batch insert: {e}")
                 finally:
                     # Ensure that the database connection is properly released
-                    from database_utils import cleanup_connections
                     cleanup_connections()
         except Exception as e:
             logging.error(f"Unexpected error in process_syslog_queue: {e}")
             time.sleep(1)
+        
+        # Log that we're still processing
+        logging.debug("Worker still running and processing messages")
 
 def monitor_queue_size(message_queue, is_running, queue_monitoring_file):
     setup_logging("Monitor")
@@ -91,7 +92,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.message_queue = multiprocessing.Queue()
         self.max_queue_size = 100000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
-        self.num_processes = 1#multiprocessing.cpu_count()
+        self.num_processes = 1  # Set to 1 as per your requirement
         self.flush_interval = 60
         self.processes = []
 
