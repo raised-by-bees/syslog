@@ -1,40 +1,18 @@
-ofi...
-2024-10-03 08:33:47,606 - Process-1 - MainThread - INFO - Full message joined: 0009396016
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Processing Cisco ISE message from 10.23.18.223: <181>Oct  3 07:33:47 HO-FRN-ISE-06S CISE_Passed_Authentications 0009396016 4 0 2024-1
-0-03 07:33:47.6...
-2024-10-03 08:33:47,606 - Process-1 - MainThread - INFO - Unhandled message type from 10.23.18.223: CISE_Passed_Authentications
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Worker still running and processing messages
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Processing message from 10.23.18.221
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Received message from 10.23.18.221: <181>Oct  3 07:33:47 HO-FRN-ISE-04S CISE_Failed_Attempts 0002078755 2 0 2024-10-03 07:33:47.614 +
-00:...
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Incomplete message from 10.23.18.221, waiting for more fragments
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Worker still running and processing messages
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Processing message from 10.23.18.221
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Received message from 10.23.18.221: <181>Oct  3 07:33:47 HO-FRN-ISE-04S CISE_Failed_Attempts 0002078755 2 1  NetworkDeviceGroups=Reau
-th ...
-2024-10-03 08:33:47,606 - Process-1 - MainThread - INFO - Full message joined: 0002078755
-2024-10-03 08:33:47,606 - Process-1 - MainThread - DEBUG - Processing Cisco ISE message from 10.23.18.221: <181>Oct  3 07:33:47 HO-FRN-ISE-04S CISE_Failed_Attempts 0002078755 2 0 2024-10-03 07
-:33:47.614 +00:...
-2024-10-03 08:33:47,606 - Process-1 - MainThread - ERROR - Max Batch Size Hit!!!
-2024-10-03 08:33:52,215 - Process-2 - MainThread - INFO - Queue size: 1621
-2024-10-03 08:33:57,216 - Process-2 - MainThread - INFO - Queue size: 3816
-2024-10-03 08:34:02,224 - Process-2 - MainThread - INFO - Queue size: 5858
-2024-10-03 08:34:07,228 - Process-2 - MainThread - INFO - Queue size: 7533
-2024-10-03 08:34:12,228 - Process-2 - MainThread - INFO - Queue size: 9756
-2024-10-03 08:34:17,228 - Process-2 - MainThread - INFO - Queue size: 11768
-2024-10-03 08:34:22,228 - Process-2 - MainThread - INFO - Queue size: 14124
-2024-10-03 08:34:27,229 - Process-2 - MainThread - INFO - Queue size: 16079
-2024-10-03 08:34:32,229 - Process-2 - MainThread - INFO - Queue size: 17505
-2024-10-03 08:34:37,229 - Process-2 - MainThread - INFO - Queue size: 19269
-2024-10-03 08:34:42,229 - Process-2 - MainThread - INFO - Queue size: 20996
-2024-10-03 08:34:42,401 - Process-1 - Thread-2 - INFO - Inserted 66 rows into pla
-2024-10-03 08:34:42,636 - Process-1 - Thread-4 - INFO - Inserted 8 rows into pwa
-2024-10-03 08:34:42,636 - Process-1 - Thread-3 - INFO - Inserted 4 rows into fwa
-2024-10-03 08:34:47,230 - Process-2 - MainThread - INFO - Queue size: 23085
-2024-10-03 08:34:52,230 - Process-2 - MainThread - INFO - Queue size: 25093
-2024-10-03 08:34:57,238 - Process-2 - MainThread - INFO - Queue size: 27154
-2024-10-03 08:35:02,239 - Process-2 - MainThread - INFO - Queue size: 28885
-2024-10-03 08:35:07,239 - Process-2 - MainThread - INFO - Queue size: 30449
-2024-10-03 08:35:12,245 - Process-2 - MainThread - INFO - Queue size: 32539
-2024-10-03 08:35:17,248 - Process-2 - MainThread - INFO - Queue size: 34363
-2024-10-03 08:35:22,248 - Process-2 - MainThread - INFO - Queue size: 36272
+graph TD
+    A[Receive Syslog Message] --> B[Queue Message]
+    B --> C{Process Message}
+    C --> D[Parse Message]
+    D --> E{Determine Message Type}
+    E --> F[Failed Attempts]
+    E --> G[TACACS Accounting]
+    E --> H[Passed Authentications]
+    F --> I[Insert into FTA/FWA/FLA]
+    G --> J[Insert into TCA]
+    H --> K[Insert into PWA/PLA]
+    I --> L[Add to Batch]
+    J --> L
+    K --> L
+    L --> M{Batch Full or Timer Expired?}
+    M -->|Yes| N[Flush Batch to Database]
+    M -->|No| O[Wait for More Messages]
+    O --> C
