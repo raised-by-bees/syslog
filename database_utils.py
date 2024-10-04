@@ -7,6 +7,7 @@ import time
 import logging
 import os
 import ipaddress
+import multiprocessing
 
 # Setup logging
 log_directory = r'C:\Syslog'
@@ -41,29 +42,30 @@ class BatchedDatabaseInserter:
         self.last_insert_time = time.time()
         self.lock = threading.Lock()
         self.timer = None
-        self.rejected_count = 0
+        self.rejected_count = multiprocessing.Value('i', 0)
 
     def validate_data(self, row_data):
         if len(row_data) != len(self.fields):
-            return False
-        for value, field_type in zip(row_data, self.field_types):
+            return False, f"Mismatch in number of fields. Expected {len(self.fields)}, got {len(row_data)}"
+        for i, (value, field_type) in enumerate(zip(row_data, self.field_types)):
             if field_type == 'inet':
                 try:
                     if value is not None:
                         ipaddress.ip_address(value)
                 except ValueError:
-                    return False
+                    return False, f"Invalid inet address for field {self.fields[i]}: {value}"
             elif field_type == 'int':
                 if not isinstance(value, int) and not (isinstance(value, str) and value.isdigit()):
-                    return False
+                    return False, f"Invalid integer for field {self.fields[i]}: {value}"
             elif field_type == 'text':
                 if not isinstance(value, str):
-                    return False
-        return True
+                    return False, f"Invalid text for field {self.fields[i]}: {value}"
+        return True, ""
 
     def add_to_batch(self, row_data):
         with self.lock:
-            if self.validate_data(row_data):
+            is_valid, error_message = self.validate_data(row_data)
+            if is_valid:
                 self.batch.append(row_data)
                 if len(self.batch) >= self.max_batch_size:
                     logging.warning(f"Max Batch Size Hit for {self.table_name}. Inserting batch.")
@@ -72,8 +74,9 @@ class BatchedDatabaseInserter:
                     self.timer = threading.Timer(60.0, self._insert_batch)
                     self.timer.start()
             else:
-                self.rejected_count += 1
-                logging.warning(f"Rejected log for {self.table_name} due to data structure mismatch")
+                with self.rejected_count.get_lock():
+                    self.rejected_count.value += 1
+                logging.warning(f"Rejected log for {self.table_name} due to data structure mismatch: {error_message}")
 
     def _insert_batch(self):
         with self.lock:
@@ -130,7 +133,7 @@ class BatchedDatabaseInserter:
         return len(self.batch)
 
     def get_rejected_count(self):
-        return self.rejected_count
+        return self.rejected_count.value
 
 # Create instances for each table with field types
 fta_inserter = BatchedDatabaseInserter('fta', 
