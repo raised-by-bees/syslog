@@ -8,7 +8,7 @@ from handler_dispatcher import handle_syslog
 import multiprocessing
 import queue
 import time
-from database_utils import flush_all_batches, log_batch_status, cleanup_connections, get_total_batch_size
+from database_utils import flush_all_batches, log_batch_status, cleanup_connections, get_total_batch_size, get_total_rejected_count
 from handler_dispatcher import handle_syslog, message_fragments
 import signal
 
@@ -70,6 +70,7 @@ def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counter
     last_received = 0
     last_handled = 0
     last_ready = 0
+    last_rejected = 0
     while is_running.value:
         queue_size = message_queue.qsize()
         fragment_queue_size = len(getattr(message_fragments, 'fragments', {}))
@@ -78,10 +79,11 @@ def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counter
             with open(queue_monitoring_file, 'a') as f:
                 f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}, Fragment Queue Size: {fragment_queue_size}\n")
             log_counter_status(counters)
-            write_counter_data(counters, counter_file, last_received, last_handled, last_ready)
+            write_counter_data(counters, counter_file, last_received, last_handled, last_ready, last_rejected)
             last_received = counters['received'].value
             last_handled = counters['handled'].value
             last_ready = counters['ready_for_insertion'].value
+            last_rejected = get_total_rejected_count()
         except Exception as e:
             logging.error(f"Error in monitor_queue_size: {e}")
         time.sleep(5)
@@ -90,16 +92,19 @@ def log_counter_status(counters):
     logging.info(f"Messages received: {counters['received'].value}")
     logging.info(f"Messages handled: {counters['handled'].value}")
     logging.info(f"Messages ready for insertion: {counters['ready_for_insertion'].value}")
+    logging.info(f"Messages rejected: {get_total_rejected_count()}")
 
-def write_counter_data(counters, counter_file, last_received, last_handled, last_ready):
+def write_counter_data(counters, counter_file, last_received, last_handled, last_ready, last_rejected):
     current_time = time.strftime('%Y-%m-%d %H:%M:%S')
     received = counters['received'].value
     handled = counters['handled'].value
     ready = counters['ready_for_insertion'].value
+    rejected = get_total_rejected_count()
     
     new_received = received - last_received
     new_handled = handled - last_handled
     new_ready = ready - last_ready
+    new_rejected = rejected - last_rejected
     
     lost_before_handling = new_received - new_handled
     lost_during_handling = new_handled - new_ready
@@ -107,8 +112,8 @@ def write_counter_data(counters, counter_file, last_received, last_handled, last
     try:
         with open(counter_file, 'a') as f:
             f.write(f"{current_time},")
-            f.write(f"{received},{handled},{ready},")
-            f.write(f"{new_received},{new_handled},{new_ready},")
+            f.write(f"{received},{handled},{ready},{rejected},")
+            f.write(f"{new_received},{new_handled},{new_ready},{new_rejected},")
             f.write(f"{lost_before_handling},{lost_during_handling}\n")
         logging.debug(f"Counter data written to {counter_file}")
     except Exception as e:
@@ -117,7 +122,6 @@ def write_counter_data(counters, counter_file, last_received, last_handled, last
         logging.error(f"Current working directory: {os.getcwd()}")
         logging.error(f"File exists: {os.path.exists(counter_file)}")
         logging.error(f"Directory exists: {os.path.exists(os.path.dirname(counter_file))}")
-        
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -145,7 +149,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
 
         # Initialize counter file with headers
         with open(self.counter_file, 'w') as f:
-            f.write("Timestamp,Total Received,Total Handled,Total Ready,New Received,New Handled,New Ready,Lost Before Handling,Lost During Handling\n")
+            f.write("Timestamp,Total Received,Total Handled,Total Ready,Total Rejected,New Received,New Handled,New Ready,New Rejected,Lost Before Handling,Lost During Handling\n")
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
