@@ -103,11 +103,20 @@ def write_counter_data(counters, counter_file, last_received, last_handled, last
     lost_before_handling = new_received - new_handled
     lost_during_handling = new_handled - new_ready
     
-    with open(counter_file, 'a') as f:
-        f.write(f"{current_time},")
-        f.write(f"{received},{handled},{ready},")
-        f.write(f"{new_received},{new_handled},{new_ready},")
-        f.write(f"{lost_before_handling},{lost_during_handling}\n")
+    try:
+        with open(counter_file, 'a') as f:
+            f.write(f"{current_time},")
+            f.write(f"{received},{handled},{ready},")
+            f.write(f"{new_received},{new_handled},{new_ready},")
+            f.write(f"{lost_before_handling},{lost_during_handling}\n")
+        logging.debug(f"Counter data written to {counter_file}")
+    except Exception as e:
+        logging.error(f"Failed to write counter data: {e}")
+        logging.error(f"Attempted to write to: {counter_file}")
+        logging.error(f"Current working directory: {os.getcwd()}")
+        logging.error(f"File exists: {os.path.exists(counter_file)}")
+        logging.error(f"Directory exists: {os.path.exists(os.path.dirname(counter_file))}")
+        
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
