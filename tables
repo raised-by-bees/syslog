@@ -1,0 +1,103 @@
+CREATE TABLE IF NOT EXISTS public.fwa
+(
+    "timestamp" timestamp with time zone NOT NULL,
+    ipaddress text COLLATE pg_catalog."default",
+    username text COLLATE pg_catalog."default",
+    nasipaddress text COLLATE pg_catalog."default",
+    calledstationid text COLLATE pg_catalog."default",
+    failurereason text COLLATE pg_catalog."default",
+    networkdevicename text COLLATE pg_catalog."default"
+)
+
+CREATE TABLE IF NOT EXISTS public.pwa
+(
+    "timestamp" timestamp with time zone NOT NULL,
+    sourceip inet,
+    nasipaddress inet,
+    networkdevicename text COLLATE pg_catalog."default",
+    requestlatency integer,
+    username text COLLATE pg_catalog."default",
+    authenticationmethod text COLLATE pg_catalog."default",
+    authenticationidentitystore text COLLATE pg_catalog."default",
+    selectedaccessservice text COLLATE pg_catalog."default",
+    selectedauthorizationprofiles text COLLATE pg_catalog."default",
+    identitygroup text COLLATE pg_catalog."default",
+    selectedauthenticationidentitystores text COLLATE pg_catalog."default",
+    authenticationstatus text COLLATE pg_catalog."default",
+    identitypolicymatchedrule text COLLATE pg_catalog."default",
+    authorizationpolicymatchedrule text COLLATE pg_catalog."default",
+    subjectcommonname text COLLATE pg_catalog."default",
+    endpointmacaddress text COLLATE pg_catalog."default",
+    isepolicysetname text COLLATE pg_catalog."default",
+    adhostresolveddns text COLLATE pg_catalog."default",
+    daystoexpiry integer,
+    sessiontimeout integer,
+    ciscoavpairacs text COLLATE pg_catalog."default",
+    deviceip inet,
+    ciscoavpairmethod text COLLATE pg_catalog."default",
+    ndlocation text COLLATE pg_catalog."default",
+    nddevice text COLLATE pg_catalog."default",
+    ndrollout text COLLATE pg_catalog."default",
+    ndreauth text COLLATE pg_catalog."default",
+    ndclosed text COLLATE pg_catalog."default",
+    calledstationid text COLLATE pg_catalog."default",
+    radiusflowtype text COLLATE pg_catalog."default"
+)
+
+CREATE TABLE IF NOT EXISTS public.pla
+(
+    "timestamp" timestamp with time zone NOT NULL,
+    sourceip inet,
+    nasipaddress inet,
+    nasportid text COLLATE pg_catalog."default",
+    networkdevicename text COLLATE pg_catalog."default",
+    requestlatency integer,
+    username text COLLATE pg_catalog."default",
+    authenticationmethod text COLLATE pg_catalog."default",
+    authenticationidentitystore text COLLATE pg_catalog."default",
+    selectedaccessservice text COLLATE pg_catalog."default",
+    selectedauthorizationprofiles text COLLATE pg_catalog."default",
+    identitygroup text COLLATE pg_catalog."default",
+    selectedauthenticationidentitystores text COLLATE pg_catalog."default",
+    authenticationstatus text COLLATE pg_catalog."default",
+    identitypolicymatchedrule text COLLATE pg_catalog."default",
+    authorizationpolicymatchedrule text COLLATE pg_catalog."default",
+    subjectcommonname text COLLATE pg_catalog."default",
+    endpointmacaddress text COLLATE pg_catalog."default",
+    isepolicysetname text COLLATE pg_catalog."default",
+    adhostresolveddns text COLLATE pg_catalog."default",
+    daystoexpiry integer,
+    sessiontimeout integer,
+    ciscoavpairacs text COLLATE pg_catalog."default",
+    deviceip inet,
+    ciscoavpairmethod text COLLATE pg_catalog."default",
+    ndlocation text COLLATE pg_catalog."default",
+    nddevice text COLLATE pg_catalog."default",
+    ndrollout text COLLATE pg_catalog."default",
+    ndreauth text COLLATE pg_catalog."default",
+    ndclosed text COLLATE pg_catalog."default"
+)
+
+
+CREATE TABLE IF NOT EXISTS public.fla
+(
+    "timestamp" timestamp with time zone NOT NULL,
+    ipaddress text COLLATE pg_catalog."default",
+    username text COLLATE pg_catalog."default",
+    nasipaddress text COLLATE pg_catalog."default",
+    nasportid text COLLATE pg_catalog."default",
+    failurereason text COLLATE pg_catalog."default",
+    networkdevicename text COLLATE pg_catalog."default"
+)
+
+CREATE TABLE IF NOT EXISTS public.tca
+(
+    "timestamp" timestamp with time zone NOT NULL,
+    username text COLLATE pg_catalog."default" NOT NULL,
+    networkdevicename text COLLATE pg_catalog."default" NOT NULL,
+    networkdeviceip inet NOT NULL,
+    remotedevice inet,
+    cmdset text COLLATE pg_catalog."default" NOT NULL,
+    ipaddress inet
+)
+
