@@ -9,6 +9,7 @@ import multiprocessing
 import queue
 import time
 from database_utils import flush_all_batches, log_batch_status, cleanup_connections, get_total_batch_size
+from handler_dispatcher import handle_syslog, message_fragments
 import signal
 
 def setup_logging(process_name):
@@ -69,13 +70,13 @@ def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counter
     last_received = 0
     last_handled = 0
     last_ready = 0
-    while is_running.value:
+   while is_running.value:
         queue_size = message_queue.qsize()
-        total_batch_size = get_total_batch_size()
-        logging.info(f"Queue size: {queue_size}, Total batch size: {total_batch_size}")
+        fragment_queue_size = len(getattr(message_fragments, 'fragments', {}))
+        logging.info(f"Queue size: {queue_size}, Fragment queue size: {fragment_queue_size}")
         try:
             with open(queue_monitoring_file, 'a') as f:
-                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}, Total Batch Size: {total_batch_size}\n")
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}, Fragment Queue Size: {fragment_queue_size}\n")
             log_counter_status(counters)
             write_counter_data(counters, counter_file, last_received, last_handled, last_ready)
             last_received = counters['received'].value
