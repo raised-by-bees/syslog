@@ -64,8 +64,11 @@ def process_syslog_queue(message_queue, is_running, flush_interval, counters):
             logging.error(f"Unexpected error in process_syslog_queue: {e}")
             time.sleep(1)
 
-def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counters):
+def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counters, counter_file):
     setup_logging("Monitor")
+    last_received = 0
+    last_handled = 0
+    last_ready = 0
     while is_running.value:
         queue_size = message_queue.qsize()
         total_batch_size = get_total_batch_size()
@@ -74,14 +77,37 @@ def monitor_queue_size(message_queue, is_running, queue_monitoring_file, counter
             with open(queue_monitoring_file, 'a') as f:
                 f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Queue Size: {queue_size}, Total Batch Size: {total_batch_size}\n")
             log_counter_status(counters)
+            write_counter_data(counters, counter_file, last_received, last_handled, last_ready)
+            last_received = counters['received'].value
+            last_handled = counters['handled'].value
+            last_ready = counters['ready_for_insertion'].value
         except Exception as e:
-            logging.error(f"Error writing to queue monitoring file: {e}")
+            logging.error(f"Error in monitor_queue_size: {e}")
         time.sleep(5)
 
 def log_counter_status(counters):
     logging.info(f"Messages received: {counters['received'].value}")
     logging.info(f"Messages handled: {counters['handled'].value}")
     logging.info(f"Messages ready for insertion: {counters['ready_for_insertion'].value}")
+
+def write_counter_data(counters, counter_file, last_received, last_handled, last_ready):
+    current_time = time.strftime('%Y-%m-%d %H:%M:%S')
+    received = counters['received'].value
+    handled = counters['handled'].value
+    ready = counters['ready_for_insertion'].value
+    
+    new_received = received - last_received
+    new_handled = handled - last_handled
+    new_ready = ready - last_ready
+    
+    lost_before_handling = new_received - new_handled
+    lost_during_handling = new_handled - new_ready
+    
+    with open(counter_file, 'a') as f:
+        f.write(f"{current_time},")
+        f.write(f"{received},{handled},{ready},")
+        f.write(f"{new_received},{new_handled},{new_ready},")
+        f.write(f"{lost_before_handling},{lost_during_handling}\n")
 
 class SyslogService(win32serviceutil.ServiceFramework):
     _svc_name_ = "PythonSyslogService"
@@ -94,6 +120,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.message_queue = multiprocessing.Queue()
         self.max_queue_size = 100000
         self.queue_monitoring_file = r"C:\Syslog\queue_size.txt"
+        self.counter_file = r"C:\Syslog\counter_data.csv"
         self.num_processes = 1  # Set to 1 as per your requirement
         self.flush_interval = 60
         self.processes = []
@@ -105,6 +132,10 @@ class SyslogService(win32serviceutil.ServiceFramework):
             'handled': multiprocessing.Value('i', 0),
             'ready_for_insertion': multiprocessing.Value('i', 0)
         }
+
+        # Initialize counter file with headers
+        with open(self.counter_file, 'w') as f:
+            f.write("Timestamp,Total Received,Total Handled,Total Ready,New Received,New Handled,New Ready,Lost Before Handling,Lost During Handling\n")
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
@@ -132,7 +163,7 @@ class SyslogService(win32serviceutil.ServiceFramework):
 
         # Start monitoring process
         monitor_process = multiprocessing.Process(target=monitor_queue_size, 
-                                                  args=(self.message_queue, self.is_running, self.queue_monitoring_file, self.counters))
+                                                  args=(self.message_queue, self.is_running, self.queue_monitoring_file, self.counters, self.counter_file))
         monitor_process.start()
         self.processes.append(monitor_process)
 
@@ -164,10 +195,3 @@ class SyslogService(win32serviceutil.ServiceFramework):
 if __name__ == '__main__':
     multiprocessing.freeze_support()  # Necessary for PyInstaller
     win32serviceutil.HandleCommandLine(SyslogService)
-
-
-
-
-def get_total_batch_size():
-    return sum(inserter.get_batch_size() for inserter in [fta_inserter, fwa_inserter, fla_inserter, 
-                                                          pwa_inserter, pla_inserter, tca_inserter])
