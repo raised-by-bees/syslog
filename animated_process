@@ -1,0 +1,106 @@
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import matplotlib.patches as patches
+
+# Set up the figure and axis
+fig, ax = plt.subplots(figsize=(15, 10))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.axis('off')
+
+# Define participants
+participants = ['MT', 'SS', 'MQ', 'WP', 'CK', 'MF', 'BDI', 'VD', 'B', 'T', 'CP', 'DB', 'MP']
+participant_positions = {p: (i, 9) for i, p in enumerate(participants)}
+
+# Define colors for headers
+header_colors = {
+    'Initialization': '#ADD8E6',
+    'Message Reception': '#90EE90',
+    'Message Processing and Database Insertion': '#FFB6C1',
+    'System Monitoring': '#FFD700',
+    'Batch Processing': '#D8BFD8',
+    'Periodic Maintenance': '#98FB98'
+}
+
+# Function to draw participants
+def draw_participants():
+    for p, (x, y) in participant_positions.items():
+        ax.text(x, y, p, ha='center', va='center', bbox=dict(facecolor='white', edgecolor='black'))
+
+# Function to draw an arrow
+def draw_arrow(start, end, text=''):
+    ax.annotate('', xy=end, xytext=start, arrowprops=dict(arrowstyle='->'))
+    mid = ((start[0] + end[0])/2, (start[1] + end[1])/2)
+    ax.text(mid[0], mid[1], text, ha='center', va='center')
+
+# Function to draw a header
+def draw_header(text, y):
+    rect = patches.Rectangle((0, y), 10, 0.5, facecolor=header_colors[text], edgecolor='none')
+    ax.add_patch(rect)
+    ax.text(5, y+0.25, text, ha='center', va='center', fontweight='bold')
+
+# Animation function
+def animate(frame):
+    ax.clear()
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 10)
+    ax.axis('off')
+    draw_participants()
+    
+    if frame >= 1:
+        draw_header('Initialization', 8)
+    if frame >= 2:
+        draw_arrow(participant_positions['MT'], participant_positions['SS'], 'Start SyslogServer')
+    if frame >= 3:
+        draw_arrow(participant_positions['MT'], participant_positions['MQ'], 'Initialize MessageQueue')
+    if frame >= 4:
+        draw_arrow(participant_positions['MT'], participant_positions['WP'], 'Start Worker Process(es)')
+    if frame >= 5:
+        draw_arrow(participant_positions['MT'], participant_positions['MP'], 'Start Monitor Process')
+    
+    if frame >= 6:
+        draw_header('Message Reception', 7)
+    if frame >= 7:
+        draw_arrow(participant_positions['SS'], participant_positions['MQ'], 'Put incoming message')
+    
+    if frame >= 8:
+        draw_header('Message Processing and Database Insertion', 6)
+    if frame >= 9:
+        draw_arrow(participant_positions['WP'], participant_positions['MQ'], 'Get message')
+    if frame >= 10:
+        draw_arrow(participant_positions['WP'], participant_positions['CK'], 'Process message')
+    if frame >= 11:
+        draw_arrow(participant_positions['CK'], participant_positions['MF'], 'Check/Store fragments')
+    if frame >= 12:
+        draw_arrow(participant_positions['CK'], participant_positions['WP'], 'Return (partial) message')
+    if frame >= 13:
+        draw_arrow(participant_positions['WP'], participant_positions['BDI'], 'add_to_batch(row_data)')
+    
+    if frame >= 14:
+        draw_header('System Monitoring', 5)
+    if frame >= 15:
+        draw_arrow(participant_positions['MP'], participant_positions['MQ'], 'Check queue size')
+    if frame >= 16:
+        draw_arrow(participant_positions['MP'], participant_positions['MP'], 'Log queue size')
+    
+    if frame >= 17:
+        draw_header('Batch Processing', 4)
+    if frame >= 18:
+        draw_arrow(participant_positions['T'], participant_positions['BDI'], 'Trigger _insert_batch()')
+    if frame >= 19:
+        draw_arrow(participant_positions['BDI'], participant_positions['CP'], 'getconn()')
+    if frame >= 20:
+        draw_arrow(participant_positions['BDI'], participant_positions['DB'], 'Execute batch INSERT')
+    
+    if frame >= 21:
+        draw_header('Periodic Maintenance', 3)
+    if frame >= 22:
+        draw_arrow(participant_positions['WP'], participant_positions['BDI'], 'flush()')
+
+# Create the animation
+anim = animation.FuncAnimation(fig, animate, frames=23, interval=1000, repeat=True)
+
+# Save the animation (you might need to install ffmpeg for this to work)
+anim.save('sequence_diagram_animation.gif', writer='pillow')
+
+plt.close(fig)
