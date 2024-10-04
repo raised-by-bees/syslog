@@ -8,7 +8,7 @@ from handler_dispatcher import handle_syslog
 import multiprocessing
 import queue
 import time
-from database_utils import flush_all_batches, log_batch_status, cleanup_connections, get_total_batch_size
+from database_utils import flush_all_batches, log_batch_status, cleanup_connections, get_total_batch_size, get_total_rejected_logs
 from handler_dispatcher import handle_syslog, message_fragments
 import signal
 
@@ -91,15 +91,17 @@ def log_counter_status(counters):
     logging.info(f"Messages handled: {counters['handled'].value}")
     logging.info(f"Messages ready for insertion: {counters['ready_for_insertion'].value}")
 
-def write_counter_data(counters, counter_file, last_received, last_handled, last_ready):
+last_received, last_handled, last_ready, last_rejected = write_counter_data(self.counters, self.counter_file, last_received, last_handled, last_ready, last_rejected)
     current_time = time.strftime('%Y-%m-%d %H:%M:%S')
     received = counters['received'].value
     handled = counters['handled'].value
     ready = counters['ready_for_insertion'].value
+    rejected = counters['rejected'].value + get_total_rejected_logs()  # Add this line
     
     new_received = received - last_received
     new_handled = handled - last_handled
     new_ready = ready - last_ready
+    new_rejected = rejected - last_rejected  # Add this line
     
     lost_before_handling = new_received - new_handled
     lost_during_handling = new_handled - new_ready
@@ -107,8 +109,8 @@ def write_counter_data(counters, counter_file, last_received, last_handled, last
     try:
         with open(counter_file, 'a') as f:
             f.write(f"{current_time},")
-            f.write(f"{received},{handled},{ready},")
-            f.write(f"{new_received},{new_handled},{new_ready},")
+            f.write(f"{received},{handled},{ready},{rejected},")
+            f.write(f"{new_received},{new_handled},{new_ready},{new_rejected},")
             f.write(f"{lost_before_handling},{lost_during_handling}\n")
         logging.debug(f"Counter data written to {counter_file}")
     except Exception as e:
@@ -117,6 +119,8 @@ def write_counter_data(counters, counter_file, last_received, last_handled, last
         logging.error(f"Current working directory: {os.getcwd()}")
         logging.error(f"File exists: {os.path.exists(counter_file)}")
         logging.error(f"Directory exists: {os.path.exists(os.path.dirname(counter_file))}")
+
+    return received, handled, ready, rejected
         
 
 class SyslogService(win32serviceutil.ServiceFramework):
@@ -140,12 +144,17 @@ class SyslogService(win32serviceutil.ServiceFramework):
         self.counters = {
             'received': multiprocessing.Value('i', 0),
             'handled': multiprocessing.Value('i', 0),
-            'ready_for_insertion': multiprocessing.Value('i', 0)
-        }
+            'ready_for_insertion': multiprocessing.Value('i', 0),
+            'rejected': multiprocessing.Value('i', 0)  # Add this line
+                }
 
         # Initialize counter file with headers
-        with open(self.counter_file, 'w') as f:
-            f.write("Timestamp,Total Received,Total Handled,Total Ready,New Received,New Handled,New Ready,Lost Before Handling,Lost During Handling\n")
+        try:
+            with open(self.counter_file, 'w') as f:
+                f.write("Timestamp,Total Received,Total Handled,Total Ready,Total Rejected,New Received,New Handled,New Ready,New Rejected,Lost Before Handling,Lost During Handling\n")
+            logging.info(f"Counter file initialized at {self.counter_file}")
+        except Exception as e:
+            logging.error(f"Failed to initialize counter file: {e}")
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
