@@ -1,7 +1,16 @@
-Literal Meaning: The function "chunKing" is responsible for handling and reassembling chunks or fragments of messages. It's "king" of managing these chunks, hence "chunKing."
-Wordplay on "Chunking": In computer science and data processing, "chunking" refers to the process of grouping data into smaller parts or "chunks" for more efficient handling. The function name plays on this term.
-Historical Reference: "Chun King" was a popular American brand of canned Chinese food, founded in the 1940s. The name sounds similar to "chunking," creating a multilayered pun.
-Cultural Blend: Just as the Chun King brand represented a fusion of American and Chinese culinary cultures, the "chunKing" function represents a fusion of technical functionality (handling message chunks) and clever wordplay.
-Royal Connotation: "King" implies mastery or supremacy. So "chunKing" playfully suggests that this function is the master of handling chunks.
-Unexpected Context: Finding such a playful pun in a technical context of syslog message processing adds an element of surprise, making it even more amusing.
-Pronunciation: When said aloud, "chunKing" sounds like "chunking," maintaining the technical meaning while visually incorporating the pun.
+2024-10-04 09:27:17,222 - Process-2 - MainThread - WARNING - Rejected log for fla due to data structure mismatch
+2024-10-04 09:27:17,284 - Process-2 - MainThread - WARNING - Rejected log for pla due to data structure mismatch
+2024-10-04 09:27:17,362 - Process-2 - MainThread - WARNING - Rejected log for fla due to data structure mismatch
+2024-10-04 09:27:17,440 - Process-2 - MainThread - WARNING - Rejected log for pwa due to data structure mismatch
+
+
+Timestamp	Total Received	Total Handled	Total Ready	Total Rejected	New Received	New Handled	New Ready	New Rejected	Lost Before Handling	Lost During Handling
+04/10/2024 09:25	290	4	3	0	290	4	3	0	286	1
+04/10/2024 09:25	1813	1813	1812	0	1523	1803	1803	0	-280	0
+04/10/2024 09:25	3314	3314	3314	0	1501	1501	1501	0	0	0
+04/10/2024 09:25	5068	5068	5068	0	1754	1754	1754	0	0	0
+04/10/2024 09:25	6676	6676	6676	0	1608	1608	1608	0	0	0
+04/10/2024 09:25	8394	8394	8394	0	1717	1718	1718	0	-1	0
+04/10/2024 09:25	10012	10012	10012	0	1618	1618	1618	0	0	0
+04/10/2024 09:25	11941	11941	11941	0	1911	1911	1911	0	0	0
+04/10/2024 09:26	13444	13439	13438	0	1499	1498	1497	0	1	1
