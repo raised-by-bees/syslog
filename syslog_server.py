@@ -164,3 +164,10 @@ class SyslogService(win32serviceutil.ServiceFramework):
 if __name__ == '__main__':
     multiprocessing.freeze_support()  # Necessary for PyInstaller
     win32serviceutil.HandleCommandLine(SyslogService)
+
+
+
+
+def get_total_batch_size():
+    return sum(inserter.get_batch_size() for inserter in [fta_inserter, fwa_inserter, fla_inserter, 
+                                                          pwa_inserter, pla_inserter, tca_inserter])
