@@ -32,10 +32,11 @@ def get_connection_pool():
     return connection_pool
 
 class BatchedDatabaseInserter:
-    def __init__(self, table_name, fields, field_types, max_batch_size=200, max_wait_time=60):
+    def __init__(self, table_name, fields, field_types, not_null_fields, max_batch_size=200, max_wait_time=60):
         self.table_name = table_name
         self.fields = fields
         self.field_types = field_types
+        self.not_null_fields = not_null_fields
         self.max_batch_size = max_batch_size
         self.max_wait_time = max_wait_time
         self.batch = []
@@ -47,19 +48,22 @@ class BatchedDatabaseInserter:
     def validate_data(self, row_data):
         if len(row_data) != len(self.fields):
             return False, f"Mismatch in number of fields. Expected {len(self.fields)}, got {len(row_data)}"
-        for i, (value, field_type) in enumerate(zip(row_data, self.field_types)):
+        for i, (value, field_type, field_name) in enumerate(zip(row_data, self.field_types, self.fields)):
+            if value is None:
+                if field_name in self.not_null_fields:
+                    return False, f"NULL value not allowed for field {field_name}"
+                continue
             if field_type == 'inet':
                 try:
-                    if value is not None:
-                        ipaddress.ip_address(value)
+                    ipaddress.ip_address(value)
                 except ValueError:
-                    return False, f"Invalid inet address for field {self.fields[i]}: {value}"
+                    return False, f"Invalid inet address for field {field_name}: {value}"
             elif field_type == 'int':
                 if not isinstance(value, int) and not (isinstance(value, str) and value.isdigit()):
-                    return False, f"Invalid integer for field {self.fields[i]}: {value}"
+                    return False, f"Invalid integer for field {field_name}: {value}"
             elif field_type == 'text':
                 if not isinstance(value, str):
-                    return False, f"Invalid text for field {self.fields[i]}: {value}"
+                    return False, f"Invalid text for field {field_name}: {value}"
         return True, ""
 
     def add_to_batch(self, row_data):
@@ -135,30 +139,36 @@ class BatchedDatabaseInserter:
     def get_rejected_count(self):
         return self.rejected_count.value
 
-# Create instances for each table with field types
+# Create instances for each table with field types and NOT NULL constraints
 fta_inserter = BatchedDatabaseInserter('fta', 
     ('timestamp', 'ipaddress', 'username', 'nasipaddress', 'remoteaddress', 'failurereason', 'networkdevicename', 'requestlatency'),
-    ('text', 'text', 'text', 'text', 'text', 'text', 'text', 'int'))
+    ('text', 'text', 'text', 'text', 'text', 'text', 'text', 'int'),
+    not_null_fields=['timestamp'])
 
 fwa_inserter = BatchedDatabaseInserter('fwa', 
     ('timestamp', 'ipaddress', 'username', 'nasipaddress', 'calledstationid', 'failurereason', 'networkdevicename'),
-    ('text', 'text', 'text', 'text', 'text', 'text', 'text'))
+    ('text', 'text', 'text', 'text', 'text', 'text', 'text'),
+    not_null_fields=['timestamp'])
 
 fla_inserter = BatchedDatabaseInserter('fla', 
     ('timestamp', 'ipaddress', 'username', 'nasipaddress', 'nasportid', 'failurereason', 'networkdevicename'),
-    ('text', 'text', 'text', 'text', 'text', 'text', 'text'))
+    ('text', 'text', 'text', 'text', 'text', 'text', 'text'),
+    not_null_fields=['timestamp'])
 
 pwa_inserter = BatchedDatabaseInserter('pwa', 
     ('timestamp', 'sourceip', 'nasipaddress', 'networkdevicename', 'requestlatency', 'ciscoavpairmethod', 'username', 'authenticationmethod', 'authenticationidentitystore', 'selectedaccessservice', 'selectedauthorizationprofiles', 'identitygroup', 'selectedauthenticationidentitystores', 'authenticationstatus', 'ndlocation', 'nddevice', 'ndrollout', 'ndreauth', 'ndclosed', 'identitypolicymatchedrule', 'authorizationpolicymatchedrule', 'subjectcommonname', 'endpointmacaddress', 'isepolicysetname', 'adhostresolveddns', 'daystoexpiry', 'sessiontimeout', 'ciscoavpairacs', 'deviceip', 'calledstationid', 'radiusflowtype'),
-    ('text', 'inet', 'inet', 'text', 'int', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'int', 'int', 'text', 'inet', 'text', 'text'))
+    ('text', 'inet', 'inet', 'text', 'int', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'int', 'int', 'text', 'inet', 'text', 'text'),
+    not_null_fields=['timestamp'])
 
 pla_inserter = BatchedDatabaseInserter('pla', 
     ('timestamp', 'sourceip', 'nasipaddress', 'nasportid', 'networkdevicename', 'requestlatency', 'ciscoavpairmethod', 'username', 'authenticationmethod', 'authenticationidentitystore', 'selectedaccessservice', 'selectedauthorizationprofiles', 'identitygroup', 'selectedauthenticationidentitystores', 'authenticationstatus', 'ndlocation', 'nddevice', 'ndrollout', 'ndreauth', 'ndclosed', 'identitypolicymatchedrule', 'authorizationpolicymatchedrule', 'subjectcommonname', 'endpointmacaddress', 'isepolicysetname', 'adhostresolveddns', 'daystoexpiry', 'sessiontimeout', 'ciscoavpairacs', 'deviceip'),
-    ('text', 'inet', 'inet', 'text', 'text', 'int', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'int', 'int', 'text', 'inet'))
+    ('text', 'inet', 'inet', 'text', 'text', 'int', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'int', 'int', 'text', 'inet'),
+    not_null_fields=['timestamp'])
 
 tca_inserter = BatchedDatabaseInserter('tca', 
     ('timestamp', 'username', 'networkdevicename', 'networkdeviceip', 'remotedevice', 'cmdset', 'ipaddress'),
-    ('text', 'text', 'text', 'inet', 'inet', 'text', 'inet'))
+    ('text', 'text', 'text', 'inet', 'inet', 'text', 'inet'),
+    not_null_fields=['timestamp', 'username', 'networkdevicename', 'networkdeviceip', 'cmdset'])
 
 def flush_all_batches():
     for inserter in [fta_inserter, fwa_inserter, fla_inserter, pwa_inserter, pla_inserter, tca_inserter]:
