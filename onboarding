@@ -1,0 +1,133 @@
+import re
+import logging
+from database_utils import BatchedDatabaseInserter, get_connection_pool
+from psycopg2 import sql
+
+# Setup logging
+logging.basicConfig(filename=r'C:\Syslog\syslog_onboarding.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+def create_new_table(table_name, fields):
+    conn = None
+    try:
+        pool = get_connection_pool()
+        conn = pool.getconn()
+        cursor = conn.cursor()
+        
+        field_definitions = ', '.join([f"{field} TEXT" for field in fields])
+        create_table_query = sql.SQL(
+            "CREATE TABLE IF NOT EXISTS {} ({})").format(
+            sql.Identifier(table_name),
+            sql.SQL(field_definitions)
+        )
+        
+        cursor.execute(create_table_query)
+        conn.commit()
+        logging.info(f"Created new table: {table_name}")
+    except Exception as e:
+        logging.error(f"Error creating new table {table_name}: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            cursor.close()
+            pool.putconn(conn)
+
+def add_column_to_table(table_name, column_name):
+    conn = None
+    try:
+        pool = get_connection_pool()
+        conn = pool.getconn()
+        cursor = conn.cursor()
+        
+        add_column_query = sql.SQL(
+            "ALTER TABLE {} ADD COLUMN IF NOT EXISTS {} TEXT").format(
+            sql.Identifier(table_name),
+            sql.Identifier(column_name)
+        )
+        
+        cursor.execute(add_column_query)
+        conn.commit()
+        logging.info(f"Added new column {column_name} to table {table_name}")
+    except Exception as e:
+        logging.error(f"Error adding column {column_name} to table {table_name}: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            cursor.close()
+            pool.putconn(conn)
+
+def onboard_new_message_type_existing_table(message_type, table_name, field_mapping):
+    # Check if all required fields exist in the table
+    for field in field_mapping.values():
+        add_column_to_table(table_name, field)
+    
+    # Create a new BatchedDatabaseInserter for this message type
+    inserter = BatchedDatabaseInserter(table_name, tuple(field_mapping.values()), tuple(['text'] * len(field_mapping)), [])
+    
+    # Return a function that can be used to handle this message type
+    def handler(message):
+        data = parse_message(message, field_mapping)
+        inserter.add_to_batch(list(data.values()))
+    
+    return handler
+
+def onboard_new_message_type_new_table(message_type, table_name, field_mapping):
+    # Create a new table for this message type
+    create_new_table(table_name, list(field_mapping.values()))
+    
+    # Create a new BatchedDatabaseInserter for this message type
+    inserter = BatchedDatabaseInserter(table_name, tuple(field_mapping.values()), tuple(['text'] * len(field_mapping)), [])
+    
+    # Return a function that can be used to handle this message type
+    def handler(message):
+        data = parse_message(message, field_mapping)
+        inserter.add_to_batch(list(data.values()))
+    
+    return handler
+
+def onboard_existing_message_new_table(message_type, old_table, new_table, field_mapping):
+    # Create a new table for this message type
+    create_new_table(new_table, list(field_mapping.values()))
+    
+    # Create a new BatchedDatabaseInserter for this message type
+    inserter = BatchedDatabaseInserter(new_table, tuple(field_mapping.values()), tuple(['text'] * len(field_mapping)), [])
+    
+    # Return a function that can be used to handle this message type
+    def handler(message):
+        data = parse_message(message, field_mapping)
+        inserter.add_to_batch(list(data.values()))
+    
+    return handler
+
+def parse_message(message, field_mapping):
+    data = {}
+    for key, field in field_mapping.items():
+        pattern = rf'{key}=(.*?)(?:,|\s|$)'
+        match = re.search(pattern, message)
+        if match:
+            data[field] = match.group(1)
+        else:
+            data[field] = None
+    return data
+
+# Example usage
+new_message_type_handler = onboard_new_message_type_existing_table(
+    'NEW_MESSAGE_TYPE',
+    'existing_table',
+    {'Field1': 'column1', 'Field2': 'column2'}
+)
+
+new_table_handler = onboard_new_message_type_new_table(
+    'ANOTHER_NEW_TYPE',
+    'new_table',
+    {'Field1': 'column1', 'Field2': 'column2', 'Field3': 'column3'}
+)
+
+existing_to_new_handler = onboard_existing_message_new_table(
+    'EXISTING_TYPE',
+    'old_table',
+    'new_table',
+    {'ExistingField1': 'new_column1', 'ExistingField2': 'new_column2'}
+)
